@@ -69,7 +69,7 @@ export default class Tuple extends React.PureComponent<Props> {
             return (
                 <g key="0">
                     <circle cx={props.cx} cy={props.cy} key={props.key} r={2.5} stroke="transparent" strokeWidth={1} fill="#F44336" />
-                    <text x={props.cx + 5} y={props.cy} dy={4} key={'0'} textAnchor="right">
+                    <text x={props.cx + 5} y={props.cy} dy={4} key={'0'} textAnchor="end">
                         {props.value}
                     </text>
                 </g>
