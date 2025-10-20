@@ -256,8 +256,9 @@ export const addDemographicsDataset = async (
     if (!patientList.configuration.singletonDatasets.size) {
 
         def.columns.forEach((c: PatientListColumn) => {
-            c.isDisplayed = true;
-            patientList.configuration.displayColumns.push(c);
+            if (c.isDisplayed) {
+                patientList.configuration.displayColumns.push(c);
+            }
         });
         patientList.configuration.singletonDatasets.set(def.id, def);
     }
