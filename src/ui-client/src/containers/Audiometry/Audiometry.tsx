@@ -133,9 +133,14 @@ class Audiometry extends React.PureComponent<Props, State> {
                         onSidesChange={this.handleSidesChange}
                         onTypesChange={this.handleTypesChange}
                     />
-                    <Button size="sm" color="secondary" outline onClick={this.handleExport}>
-                        <FiDownload /> Export CSV
-                    </Button>
+                    <div className={`${c}-export-buttons`}>
+                        <Button size="sm" color="secondary" outline onClick={this.handleExportPlot}>
+                            <FiDownload /> Export Plot Data
+                        </Button>
+                        <Button size="sm" color="secondary" outline onClick={this.handleExportAll}>
+                            <FiDownload /> Export All Readings
+                        </Button>
+                    </div>
                 </div>
                 <AudiogramChart
                     data={summaryData}
@@ -215,10 +220,18 @@ class Audiometry extends React.PureComponent<Props, State> {
         this.setState({ selectedTypes: types, summaryData });
     };
 
-    private handleExport = () => {
+    private handleExportPlot = () => {
         const { rows, selectedSides, selectedTypes } = this.state;
         const filtered = getFilteredRows(rows, selectedSides, selectedTypes);
-        exportAudiogramCsv(filtered);
+        exportAudiogramCsv(filtered, 'audiogram_plot_data.csv');
+    };
+
+    private handleExportAll = () => {
+        const { rows, selectedSides, selectedTypes } = this.state;
+        const filtered = rows.filter(r =>
+            selectedSides.includes(r.side) && selectedTypes.includes(r.type)
+        );
+        exportAudiogramCsv(filtered, 'audiogram_all_readings.csv');
     };
 }
 
