@@ -2,6 +2,9 @@
 .vscode
 .vs
 
+# SetupProxy for hot reload dev env
+setupProxy.js
+
 # MacOS
 .DS_Store
 

@@ -1,0 +1,19 @@
+/*
+ * DEV ONLY: Proxy through nginx-basicauth (port 8443) so that
+ * API requests go through the full auth flow (basic auth + header injection).
+ *
+ * Override credentials with LEAF_DEV_USER / LEAF_DEV_PASS env vars if needed.
+ */
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+const LEAF_DEV_USER = process.env.LEAF_DEV_USER || 'username';
+const LEAF_DEV_PASS = process.env.LEAF_DEV_PASS || 'passcode';
+
+module.exports = function(app) {
+    app.use('/api', createProxyMiddleware({
+        target: 'https://localhost:8443',
+        changeOrigin: true,
+        secure: false,
+        auth: `${LEAF_DEV_USER}:${LEAF_DEV_PASS}`,
+    }));
+};
