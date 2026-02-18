@@ -1,0 +1,99 @@
+/*
+ * PAC 20260218
+ */
+
+/* Container */
+.audiometry-container {
+    padding: 20px;
+    font-family: Roboto;
+}
+
+/* Loading */
+.audiometry-loading {
+    width: 100%;
+}
+
+.audiometry-loading > .loader {
+    position: static !important;
+}
+
+.audiometry-loading .loader-svg {
+    top: 0 !important;
+    width: 100px !important;
+}
+
+.audiometry-loading .loader-fallback {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Empty / Error */
+.audiometry-empty,
+.audiometry-error {
+    background-color: rgba(28, 170, 221, 0.05);
+    border: 2px dashed rgba(28, 170, 221, 0.699);
+    border-radius: 8px;
+    color: black;
+    margin: 0;
+    padding: 20px;
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+}
+
+.audiometry-empty p,
+.audiometry-error p {
+    font-size: 1.4rem;
+    font-weight: 100;
+    margin-bottom: 0;
+    text-align: center;
+}
+
+/* Toolbar */
+.audiometry-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+/* Filters */
+.audiogram-filters {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.audiogram-filters-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.audiogram-filters-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #555;
+}
+
+/* Tooltip */
+.audiogram-tooltip {
+    background: white;
+    border: 1px solid rgb(230, 230, 230);
+    border-radius: 4px;
+    box-shadow: 0px 4px 9px rgba(0, 0, 0, 0.24);
+    font-size: 0.85rem;
+    padding: 8px 12px;
+}
+
+.audiogram-tooltip-header {
+    border-bottom: 1px solid rgb(230, 230, 230);
+    font-weight: 600;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+}
