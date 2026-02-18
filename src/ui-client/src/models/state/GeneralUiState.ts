@@ -14,7 +14,8 @@ export enum Routes {
     Visualize = 3,
     Timelines = 4,
     PatientList = 5,
-    AdminPanel = 6
+    AdminPanel = 6,
+    Audiometry = 7
 }
 
 export enum NotificationStates {

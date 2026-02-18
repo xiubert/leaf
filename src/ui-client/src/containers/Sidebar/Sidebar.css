@@ -184,6 +184,17 @@
     border-left-color: rgb(190, 202, 12);
 }
 
+/* Audiometry */
+.sidebar-tab-link.audiometry .sidebar-tab.selected .sidebar-icon ,
+.sidebar-tab-link.audiometry .sidebar-tab.enabled:hover .sidebar-icon  {
+    color: rgb(230, 74, 100);
+}
+
+.sidebar-tab-link.audiometry .sidebar-tab.selected,
+.sidebar-tab-link.audiometry .sidebar-tab.enabled:hover {
+    border-left-color: rgb(230, 74, 100);
+}
+
 .sidebar-cd2h-logo-wrapper {
     border: 1px solid transparent;
     border-radius: 10px;

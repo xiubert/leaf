@@ -6,12 +6,13 @@
  */ 
 
 import React, { Suspense } from 'react'
-import { FiBarChart2, FiMap, FiSearch, FiSliders } from 'react-icons/fi';
+import { FiActivity, FiBarChart2, FiMap, FiSearch, FiSliders } from 'react-icons/fi';
 import { MdPerson } from 'react-icons/md'
 import { FindPatients } from '../components/FindPatients/FindPatients';
 import LeafMap from '../containers/Map/LeafMap';
 import PatientList from '../containers/PatientList/PatientList';
 import Visualize from '../containers/Visualize/Visualize';
+import Audiometry from '../containers/Audiometry/Audiometry';
 import { Routes } from '../models/state/GeneralUiState';
 import { UserContext, AppConfig } from '../models/Auth';
 import { MdSecurity } from 'react-icons/md';
@@ -84,6 +85,16 @@ const patientList = (): RouteConfig => {
     };
 };
 
+const audiometry = (): RouteConfig => {
+    return {
+        display: 'Audiometry',
+        icon: <FiActivity />,
+        index: Routes.Audiometry,
+        path: '/audiometry',
+        render: () => <Audiometry />
+    };
+};
+
 /*
  * Lazy-load admin panel, as most users will never see it
  */
@@ -130,6 +141,7 @@ export const getRoutes = (config: AppConfig, userContext: UserContext): RouteCon
     if (client.timelines.enabled)   { routes.push(timelines()); }
     if (client.patientList.enabled) { routes.push(patientList()); }
     if (userContext && userContext.isAdmin) { routes.push(admin()); }
+    routes.push(audiometry());
 
     return routes;
 };

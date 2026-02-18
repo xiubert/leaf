@@ -45,7 +45,7 @@ export default class Sidebar extends React.PureComponent<Props> {
                                 dispatch={dispatch}
                                 isActive={e.index === currentRoute}
                                 isBeta={e.isBeta}
-                                selectable={cohortLoaded || (e.index === Routes.FindPatients || e.index === Routes.AdminPanel)}
+                                selectable={cohortLoaded || (e.index === Routes.FindPatients || e.index === Routes.AdminPanel || e.index === Routes.Audiometry)}
                                 />
                             ))}
                     </ul>

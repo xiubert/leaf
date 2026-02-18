@@ -88,7 +88,7 @@ export const handleSidebarTabClick = (route: Routes) => {
                 show: true
             };
             dispatch(showInfoModal(info));
-        } else if (route === Routes.FindPatients) {
+        } else if (route === Routes.FindPatients || route === Routes.Audiometry) {
             dispatch(setRoute(route));
         } else if (route === Routes.AdminPanel) {
             dispatch(setRoute(route));
