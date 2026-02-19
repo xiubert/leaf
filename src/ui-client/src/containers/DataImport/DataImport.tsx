@@ -10,6 +10,7 @@ import { connect } from 'react-redux';
 import ImportState from '../../models/state/Import';
 import { AppState } from '../../models/state/AppState';
 import REDCapImportModal from '../../components/DataImport/REDCap/REDCapImportModal';
+import MrnImportModal from '../../components/DataImport/MrnList/MrnImportModal';
 import { GeneralUiState } from '../../models/state/GeneralUiState';
 
 interface StateProps {
@@ -28,7 +29,8 @@ class DataImportContainer extends React.PureComponent<Props> {
         const { dataImport, dispatch, generalUi } = this.props;
 
         return ([
-            <REDCapImportModal data={dataImport} dispatch={dispatch} show={generalUi.showImportRedcapModal} key={1} />
+            <REDCapImportModal data={dataImport} dispatch={dispatch} show={generalUi.showImportRedcapModal} key={1} />,
+            <MrnImportModal data={dataImport} dispatch={dispatch} show={generalUi.showImportMrnModal} key={2} />
         ]);
     }
 };

@@ -67,8 +67,37 @@ var buildExtensionImportTree = function (payload) {
         var redcap = imports.filter(function (i) { return i.type === redcapImport; });
         buildRedcapImportTree(redcap);
     }
+    /*
+     * Add MRN patient list import concepts.
+     */
+    var mrn = imports.filter(function (i) { return i.type === mrnImport; });
+    buildMrnImportTree(mrn);
     var roots = [ ...conceptMap.values() ].filter(c => c.isRoot);
     return { requestId: requestId, result: roots };
+};
+/*
+ * Build the MRN patient list import concept tree map.
+ */
+var buildMrnImportTree = function (mrnImports) {
+    if (mrnImports.length === 0) { return; }
+    var rootId = "urn:leaf:import:mrn:root";
+    var root = __assign(__assign({}, getEmptyConcept()), { id: rootId, universalId: rootId, isParent: true, isRoot: true, childrenOnDrop: [], uiDisplayName: 'Patient Lists' });
+    for (var i = 0; i < mrnImports.length; i++) {
+        var impt = mrnImports[i];
+        var struct = impt.structure;
+        var conc = __assign(__assign({}, getEmptyConcept()), {
+            extensionId: impt.id,
+            id: struct.id,
+            universalId: struct.id,
+            parentId: rootId,
+            rootId: rootId,
+            uiDisplayName: struct.name || 'Patient List',
+            uiDisplayText: 'Included in patient list "' + (struct.name || 'Patient List') + '"'
+        });
+        conceptMap.set(conc.universalId, conc);
+        root.childrenOnDrop.push(conc);
+    }
+    conceptMap.set(rootId, root);
 };
 /*
  * Build the REDCap Import-specific concept tree map.

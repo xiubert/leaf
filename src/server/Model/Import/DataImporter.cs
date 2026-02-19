@@ -105,15 +105,27 @@ namespace Model.Import
             return deleted;
         }
 
-        public async Task<IImportDataResult> ImportData(Guid id, IEnumerable<ImportRecord> records)
+        public async Task<IImportDataResult> ImportData(Guid id, IEnumerable<ImportRecord> records, bool skipMapping = false)
         {
-            log.LogInformation("Importing records. ImportMetadataId:{id} RecordCount:{cnt}", id, records.Count());
+            log.LogInformation("Importing records. ImportMetadataId:{id} RecordCount:{cnt} SkipMapping:{skip}", id, records.Count(), skipMapping);
+
+            if (skipMapping)
+            {
+                var list = records.ToList();
+                foreach (var r in list)
+                {
+                    r.PersonId = r.SourcePersonId;
+                }
+                var result = await importService.ImportDataAsync(id, list);
+                result.Unmapped = Enumerable.Empty<string>();
+                return result;
+            }
 
             var mapped = await mapper.MapIds(records);
-            var result = await importService.ImportDataAsync(id, mapped.Item1);
-            result.Unmapped = mapped.Item2;
+            var result2 = await importService.ImportDataAsync(id, mapped.Item1);
+            result2.Unmapped = mapped.Item2;
 
-            return result;
+            return result2;
         }
 
         public async Task<IEnumerable<ImportRecord>> GetImportRecords(Guid id)

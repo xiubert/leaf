@@ -7,7 +7,7 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const LEAF_DEV_USER = process.env.LEAF_DEV_USER || 'username';
-const LEAF_DEV_PASS = process.env.LEAF_DEV_PASS || 'passcode';
+const LEAF_DEV_PASS = process.env.LEAF_DEV_PASS || 'password';
 
 module.exports = function(app) {
     app.use('/api', createProxyMiddleware({

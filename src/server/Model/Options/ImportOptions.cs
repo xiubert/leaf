@@ -10,6 +10,7 @@ namespace Model.Options
     public class ImportOptions
     {
         public REDCapImportOptions REDCap { get; set; }
+        public MrnImportOptions MRN { get; set; } = new MrnImportOptions();
     }
 
     public class REDCapImportOptions : IEnabled
@@ -17,5 +18,10 @@ namespace Model.Options
         public bool Enabled { get; set; } = false;
         public string ApiURI { get; set; }
         public int BatchSize { get; set; }
+    }
+
+    public class MrnImportOptions : IEnabled
+    {
+        public bool Enabled { get; set; } = true;
     }
 }

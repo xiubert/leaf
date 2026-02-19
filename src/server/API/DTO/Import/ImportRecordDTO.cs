@@ -39,7 +39,8 @@ namespace API.DTO.Import
 
     public class ImportDataRecordDTO
     {
-        public IEnumerable<ImportRecordDTO> Records { get; set; } 
+        public IEnumerable<ImportRecordDTO> Records { get; set; }
+        public bool SkipMapping { get; set; }
     }
 }
 

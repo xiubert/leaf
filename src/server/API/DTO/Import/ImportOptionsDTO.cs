@@ -10,11 +10,23 @@ namespace API.DTO.Import
 {
     public class ImportOptionsDTO
     {
+        public MrnImportOptionsDTO MRN { get; set; }
         public REDCapImportOptionsDTO REDCap { get; set; }
 
         public ImportOptionsDTO(ImportOptions importOptions)
         {
+            MRN = new MrnImportOptionsDTO(importOptions.MRN);
             REDCap = new REDCapImportOptionsDTO(importOptions.REDCap);
+        }
+
+        public class MrnImportOptionsDTO
+        {
+            public bool Enabled { get; set; }
+
+            public MrnImportOptionsDTO(MrnImportOptions mrnOptions)
+            {
+                Enabled = mrnOptions.Enabled;
+            }
         }
 
         public class REDCapImportOptionsDTO
