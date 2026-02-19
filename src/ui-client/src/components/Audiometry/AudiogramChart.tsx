@@ -217,7 +217,7 @@ export default class AudiogramChart extends React.PureComponent<Props> {
                 {ptaBarData.length > 0 && (
                     <div ref={this.ptaRef} className="audiogram-pta-panel">
                         <div className="audiogram-pta-panel-header">
-                            <span className="audiogram-pta-panel-title">PTA</span>
+                            <span className="audiogram-pta-panel-title">PTA-3</span>
                             <button
                                 className="audiogram-export-btn"
                                 title="Export PTA chart as PNG"

@@ -257,6 +257,153 @@
     color: #555;
 }
 
+/* ── WRS vs. PTA scatter section ─────────────────────────────────────────── */
+.wrs-scatter-section {
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.wrs-scatter-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.wrs-scatter-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+    letter-spacing: 0.01em;
+}
+
+.wrs-scatter-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wrs-scatter-filter-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #555;
+}
+
+.wrs-scatter-chart-wrap {
+    position: relative;
+}
+
+.wrs-scatter-empty {
+    font-size: 0.85rem;
+    color: #888;
+    padding: 16px 0 8px 0;
+    font-style: italic;
+}
+
+.wrs-scatter-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+}
+
+/* Cohort series legend */
+.wrs-scatter-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    margin-top: 4px;
+    padding-left: 60px;
+}
+
+.wrs-scatter-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    color: #333;
+}
+
+.wrs-scatter-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+/* Normative band key */
+.wrs-scatter-norm-legend {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 6px;
+    padding-left: 60px;
+    font-size: 0.76rem;
+    color: #666;
+}
+
+.wrs-norm-band {
+    display: inline-block;
+    width: 16px;
+    height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.wrs-norm-normal {
+    background: rgba(100, 200, 100, 0.5);
+}
+
+.wrs-norm-borderline {
+    background: rgba(255, 180, 50, 0.55);
+}
+
+.wrs-norm-poor {
+    background: rgba(255, 80, 80, 0.45);
+}
+
+.wrs-norm-line-swatch {
+    display: inline-block;
+    width: 24px;
+    height: 0;
+    border-top: 2px dashed rgba(40, 130, 40, 0.7);
+    flex-shrink: 0;
+    vertical-align: middle;
+    margin-top: -2px;
+}
+
+/* WRS distribution box plot panel (right of scatter) */
+.wrs-box-panel {
+    flex: 0 0 138px;
+    width: 138px;
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    padding-left: 6px;
+}
+
+.wrs-box-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+    padding-right: 2px;
+}
+
+.wrs-box-panel-title {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #555;
+}
+
+/* The export button inside the box panel header is inline, not absolute */
+.wrs-box-panel-header .audiogram-export-btn {
+    position: static;
+    padding: 2px 4px;
+    background: none;
+}
+
 /* Chart PNG export buttons */
 .audiogram-export-btn {
     position: absolute;

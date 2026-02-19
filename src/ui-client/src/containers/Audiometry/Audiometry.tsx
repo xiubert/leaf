@@ -1,5 +1,5 @@
 /*
- * PAC 20260218
+ * PAC 20260218 / 20260219
  */
 
 import React from 'react';
@@ -8,15 +8,17 @@ import { AppState } from '../../models/state/AppState';
 import { CohortStateType } from '../../models/state/CohortState';
 import { SavedQueryRef } from '../../models/Query';
 import { PatientListDatasetDTO } from '../../models/patientList/Dataset';
-import { findAudiogramDatasetId, fetchAudiogramData } from '../../services/audiometryApi';
+import { findAudiogramDatasetId, fetchAudiogramData, findWrsDatasetId } from '../../services/audiometryApi';
 import {
     AudiogramRow, AudiogramFilterOptions, AudiogramSeries,
     parseAudiogramData, extractFilterOptions, aggregateAudiogramData, computePtaSummary,
     getFilteredRows, exportMultiSeriesCsv
 } from '../../utils/audiogramData';
+import { WrsRow, parseWrsData } from '../../utils/wrsData';
 import AudiogramChart from '../../components/Audiometry/AudiogramChart';
 import AudiogramFilters from '../../components/Audiometry/AudiogramFilters';
 import CohortComparePanel, { ComparisonEntry } from '../../components/Audiometry/CohortComparePanel';
+import WrsScatterChart, { WrsComparisonEntry } from '../../components/Audiometry/WrsScatterChart';
 import { Button } from 'reactstrap';
 import { FiDownload } from 'react-icons/fi';
 import LoaderIcon from '../../components/Other/LoaderIcon/LoaderIcon';
@@ -42,25 +44,30 @@ type Props = StateProps & OwnProps & DispatchProps;
 
 interface ComparisonState {
     queryId: string;
-    label: string;
-    color: string;
+    label:   string;
+    color:   string;
     loading: boolean;
-    error: string | null;
-    rows: AudiogramRow[];
+    error:   string | null;
+    rows:    AudiogramRow[];
+    wrsRows: WrsRow[];
 }
 
 interface State {
-    loading: boolean;
-    error: string | null;
-    rows: AudiogramRow[];
-    filterOptions: AudiogramFilterOptions;
-    selectedSides: string[];
-    selectedTypes: string[];
-    width: number;
-    height: number;
-    comparisons: ComparisonState[];
+    loading:         boolean;
+    error:           string | null;
+    rows:            AudiogramRow[];
+    filterOptions:   AudiogramFilterOptions;
+    selectedSides:   string[];
+    selectedTypes:   string[];
+    width:           number;
+    height:          number;
+    comparisons:     ComparisonState[];
     showCurrentCohort: boolean;
     excludeModified: boolean;
+    // WRS
+    wrsRows:         WrsRow[];
+    wrsLoading:      boolean;
+    wrsError:        string | null;
 }
 
 class Audiometry extends React.PureComponent<Props, State> {
@@ -70,17 +77,20 @@ class Audiometry extends React.PureComponent<Props, State> {
         super(props);
         const dim = this.getDimensions();
         this.state = {
-            loading: false,
-            error: null,
-            rows: [],
-            filterOptions: { sides: [], types: [] },
-            selectedSides: [],
-            selectedTypes: [],
-            width: dim.width,
-            height: dim.height,
-            comparisons: [],
+            loading:           false,
+            error:             null,
+            rows:              [],
+            filterOptions:     { sides: [], types: [] },
+            selectedSides:     [],
+            selectedTypes:     [],
+            width:             dim.width,
+            height:            dim.height,
+            comparisons:       [],
             showCurrentCohort: true,
-            excludeModified: true
+            excludeModified:   true,
+            wrsRows:           [],
+            wrsLoading:        false,
+            wrsError:          null,
         };
     }
 
@@ -106,7 +116,8 @@ class Audiometry extends React.PureComponent<Props, State> {
     public render() {
         const { cohortLoaded, savedQueries } = this.props;
         const { loading, error, filterOptions, selectedSides, selectedTypes,
-                width, height, comparisons, showCurrentCohort, excludeModified } = this.state;
+                width, height, comparisons, showCurrentCohort, excludeModified,
+                rows, wrsRows, wrsLoading } = this.state;
         const c = 'audiometry';
 
         if (!cohortLoaded) {
@@ -141,18 +152,28 @@ class Audiometry extends React.PureComponent<Props, State> {
             );
         }
 
-        const chartWidth = Math.max(width - 40, 400);
+        const chartWidth  = Math.max(width - 40, 400);
         const chartHeight = Math.max(height - 200, 280);
+        const wrsHeight   = Math.max(Math.round(chartHeight * 0.8), 280);
 
         const series = this.buildSeries();
 
         const compEntries: ComparisonEntry[] = comparisons.map(comp => ({
             queryId: comp.queryId,
-            label: comp.label,
-            color: comp.color,
+            label:   comp.label,
+            color:   comp.color,
             loading: comp.loading,
-            error: comp.error
+            error:   comp.error,
         }));
+
+        const wrsComparisons: WrsComparisonEntry[] = comparisons
+            .filter(c => !c.loading && !c.error && c.rows.length > 0)
+            .map(c => ({
+                label:         c.label,
+                color:         c.color,
+                wrsRows:       c.wrsRows,
+                audiogramRows: c.rows,
+            }));
 
         return (
             <div className={`${c}-container scrollable-offset-by-header`}>
@@ -176,14 +197,33 @@ class Audiometry extends React.PureComponent<Props, State> {
                         </Button>
                     </div>
                 </div>
+
                 <div className={`${c}-body`}>
                     <div className={`${c}-chart-area`}>
+                        {/* ── Audiogram + PTA ─────────────────────────── */}
                         <AudiogramChart
                             series={series}
                             width={chartWidth}
                             height={chartHeight}
                         />
+
+                        {/* ── WRS vs. PTA scatter ─────────────────────── */}
+                        {!wrsLoading && (
+                            <WrsScatterChart
+                                currentWrsRows={wrsRows}
+                                currentAudiogramRows={rows}
+                                comparisons={wrsComparisons}
+                                showCurrentCohort={showCurrentCohort}
+                                height={wrsHeight}
+                            />
+                        )}
+                        {wrsLoading && (
+                            <div className="wrs-scatter-section wrs-scatter-loading">
+                                <LoaderIcon size={40} />
+                            </div>
+                        )}
                     </div>
+
                     <div className={`${c}-sidebar`}>
                         <CohortComparePanel
                             savedQueries={savedQueries}
@@ -206,22 +246,22 @@ class Audiometry extends React.PureComponent<Props, State> {
 
         if (showCurrentCohort) {
             result.push({
-                id: 'current',
+                id:    'current',
                 label: 'Current Cohort',
                 color: CURRENT_COLOR,
-                data: aggregateAudiogramData(rows, selectedSides, selectedTypes, excludeModified),
-                pta: computePtaSummary(rows, selectedSides, selectedTypes, excludeModified)
+                data:  aggregateAudiogramData(rows, selectedSides, selectedTypes, excludeModified),
+                pta:   computePtaSummary(rows, selectedSides, selectedTypes, excludeModified)
             });
         }
 
         for (const comp of comparisons) {
             if (comp.loading || comp.error || comp.rows.length === 0) continue;
             result.push({
-                id: comp.queryId,
+                id:    comp.queryId,
                 label: comp.label,
                 color: comp.color,
-                data: aggregateAudiogramData(comp.rows, selectedSides, selectedTypes, excludeModified),
-                pta: computePtaSummary(comp.rows, selectedSides, selectedTypes, excludeModified)
+                data:  aggregateAudiogramData(comp.rows, selectedSides, selectedTypes, excludeModified),
+                pta:   computePtaSummary(comp.rows, selectedSides, selectedTypes, excludeModified)
             });
         }
 
@@ -245,12 +285,16 @@ class Audiometry extends React.PureComponent<Props, State> {
     private loadData = async () => {
         const { appState, queryId } = this.props;
         this.prevQueryId = queryId;
-        this.setState({ loading: true, error: null });
+        this.setState({ loading: true, error: null, wrsLoading: true, wrsError: null });
 
         try {
             const datasetId = findAudiogramDatasetId(appState);
             if (!datasetId) {
-                this.setState({ loading: false, error: 'Audiogram dataset not found. Please ensure the "Audiogram Thresholds" dataset is configured.' });
+                this.setState({
+                    loading: false,
+                    error:   'Audiogram dataset not found. Please ensure the "Audiogram Thresholds" dataset is configured.',
+                    wrsLoading: false,
+                });
                 return;
             }
 
@@ -259,24 +303,32 @@ class Audiometry extends React.PureComponent<Props, State> {
             const filterOptions = extractFilterOptions(rows);
 
             const selectedSides = filterOptions.sides.length > 0 ? [...filterOptions.sides] : [];
-            const airType = filterOptions.types.find(t => t === 'AIR');
+            const airType       = filterOptions.types.find(t => t === 'AIR');
             const selectedTypes = filterOptions.types.length > 0
                 ? (airType ? ['AIR'] : [filterOptions.types[0]])
                 : [];
 
-            this.setState({
-                loading: false,
-                rows,
-                filterOptions,
-                selectedSides,
-                selectedTypes
-            });
+            this.setState({ loading: false, rows, filterOptions, selectedSides, selectedTypes });
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
-            this.setState({
-                loading: false,
-                error: `Failed to load audiogram data: ${msg}`
-            });
+            this.setState({ loading: false, error: `Failed to load audiogram data: ${msg}`, wrsLoading: false });
+            return;
+        }
+
+        // WRS data — load independently so audiogram still works if WRS is absent
+        try {
+            const wrsDatasetId = findWrsDatasetId(appState);
+            if (!wrsDatasetId) {
+                // Dataset not configured — skip silently
+                this.setState({ wrsLoading: false });
+                return;
+            }
+            const wrsDto: PatientListDatasetDTO = await fetchAudiogramData(appState, queryId, wrsDatasetId);
+            const wrsRows = parseWrsData(wrsDto);
+            this.setState({ wrsLoading: false, wrsRows });
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            this.setState({ wrsLoading: false, wrsError: `Failed to load WRS data: ${msg}` });
         }
     };
 
@@ -297,39 +349,46 @@ class Audiometry extends React.PureComponent<Props, State> {
         const { comparisons } = this.state;
 
         const colorIdx = comparisons.length % COMPARISON_COLORS.length;
-        const color = COMPARISON_COLORS[colorIdx];
+        const color    = COMPARISON_COLORS[colorIdx];
 
         const newComp: ComparisonState = {
             queryId, label, color,
-            loading: true, error: null, rows: []
+            loading: true, error: null, rows: [], wrsRows: [],
         };
 
         this.setState({ comparisons: [...comparisons, newComp] });
 
+        const datasetId    = findAudiogramDatasetId(appState);
+        const wrsDatasetId = findWrsDatasetId(appState);
+
+        let rows:    AudiogramRow[] = [];
+        let wrsRows: WrsRow[]       = [];
+        let error:   string | null  = null;
+
         try {
-            const datasetId = findAudiogramDatasetId(appState);
             if (!datasetId) throw new Error('Audiogram dataset not configured');
-
-            const dto: PatientListDatasetDTO = await fetchAudiogramData(appState, queryId, datasetId);
-            const rows = parseAudiogramData(dto);
-
-            this.setState(prev => ({
-                comparisons: prev.comparisons.map(c =>
-                    c.queryId === queryId
-                        ? { ...c, loading: false, rows }
-                        : c
-                )
-            }));
+            const dto = await fetchAudiogramData(appState, queryId, datasetId);
+            rows = parseAudiogramData(dto);
         } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            this.setState(prev => ({
-                comparisons: prev.comparisons.map(c =>
-                    c.queryId === queryId
-                        ? { ...c, loading: false, error: msg }
-                        : c
-                )
-            }));
+            error = err instanceof Error ? err.message : 'Unknown error';
         }
+
+        if (!error && wrsDatasetId) {
+            try {
+                const wrsDto = await fetchAudiogramData(appState, queryId, wrsDatasetId);
+                wrsRows = parseWrsData(wrsDto);
+            } catch {
+                // WRS is supplemental — don't block the comparison on its failure
+            }
+        }
+
+        this.setState(prev => ({
+            comparisons: prev.comparisons.map(c =>
+                c.queryId === queryId
+                    ? { ...c, loading: false, error, rows, wrsRows }
+                    : c
+            )
+        }));
     };
 
     private handleToggleCurrentCohort = () => {
@@ -355,7 +414,7 @@ class Audiometry extends React.PureComponent<Props, State> {
             if (!comp.loading && !comp.error && comp.rows.length > 0) {
                 entries.push({
                     label: comp.label,
-                    rows: getFilteredRows(comp.rows, selectedSides, selectedTypes, excludeModified)
+                    rows:  getFilteredRows(comp.rows, selectedSides, selectedTypes, excludeModified)
                 });
             }
         }
@@ -363,8 +422,7 @@ class Audiometry extends React.PureComponent<Props, State> {
         exportMultiSeriesCsv(entries, 'audiogram_export.csv');
     };
 
-    /** Export every raw row for each visible cohort — no side/type/modifier filtering,
-     *  no deduplication to most-recent visit. All audiogram records are included. */
+    /** Export every raw row for each visible cohort — no filtering. */
     private handleExportAll = () => {
         const { rows, comparisons, showCurrentCohort } = this.state;
 
@@ -399,8 +457,8 @@ const mapStateToProps = (state: AppState): StateProps => {
     return {
         queryId,
         cohortLoaded: state.cohort.count.state === CohortStateType.LOADED,
-        appState: state,
-        savedQueries
+        appState:     state,
+        savedQueries,
     };
 };
 

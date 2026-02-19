@@ -7,6 +7,7 @@ import { PatientListDatasetDTO, PatientListDatasetShape } from '../models/patien
 import { HttpFactory } from './HttpFactory';
 
 const AUDIOGRAM_DATASET_NAME = 'Audiogram Thresholds';
+const WRS_DATASET_NAME       = 'Aud_WRS';
 
 /**
  * Find the audiogram dataset ID from the already-loaded datasets in Redux state.
@@ -14,6 +15,18 @@ const AUDIOGRAM_DATASET_NAME = 'Audiogram Thresholds';
 export const findAudiogramDatasetId = (state: AppState): string | undefined => {
     for (const [id, ds] of state.datasets.all) {
         if (ds.name === AUDIOGRAM_DATASET_NAME) {
+            return id;
+        }
+    }
+    return undefined;
+};
+
+/**
+ * Find the WRS dataset ID from the already-loaded datasets in Redux state.
+ */
+export const findWrsDatasetId = (state: AppState): string | undefined => {
+    for (const [id, ds] of state.datasets.all) {
+        if (ds.name === WRS_DATASET_NAME) {
             return id;
         }
     }
