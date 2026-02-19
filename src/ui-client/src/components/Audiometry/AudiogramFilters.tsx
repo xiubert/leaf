@@ -10,14 +10,16 @@ interface Props {
     availableTypes: string[];
     selectedSides: string[];
     selectedTypes: string[];
+    excludeModified: boolean;
     onSidesChange: (sides: string[]) => void;
     onTypesChange: (types: string[]) => void;
+    onExcludeModifiedChange: (exclude: boolean) => void;
 }
 
 export default class AudiogramFilters extends React.PureComponent<Props> {
 
     public render() {
-        const { availableSides, availableTypes, selectedSides, selectedTypes } = this.props;
+        const { availableSides, availableTypes, selectedSides, selectedTypes, excludeModified } = this.props;
         const c = 'audiogram-filters';
 
         return (
@@ -52,6 +54,17 @@ export default class AudiogramFilters extends React.PureComponent<Props> {
                             </Button>
                         ))}
                     </ButtonGroup>
+                </div>
+
+                <div className={`${c}-group`}>
+                    <label className={`${c}-check-label`}>
+                        <input
+                            type="checkbox"
+                            checked={excludeModified}
+                            onChange={e => this.props.onExcludeModifiedChange(e.target.checked)}
+                        />
+                        <span>Exclude modified readings</span>
+                    </label>
                 </div>
             </div>
         );

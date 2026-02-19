@@ -6,29 +6,48 @@ import React from 'react';
 import { connect } from 'react-redux';
 import { AppState } from '../../models/state/AppState';
 import { CohortStateType } from '../../models/state/CohortState';
+import { SavedQueryRef } from '../../models/Query';
 import { PatientListDatasetDTO } from '../../models/patientList/Dataset';
 import { findAudiogramDatasetId, fetchAudiogramData } from '../../services/audiometryApi';
 import {
-    AudiogramRow, AudiogramSummaryPoint, AudiogramFilterOptions,
+    AudiogramRow, AudiogramFilterOptions, AudiogramSeries,
     parseAudiogramData, extractFilterOptions, aggregateAudiogramData,
-    getFilteredRows, exportAudiogramCsv
+    getFilteredRows, exportMultiSeriesCsv
 } from '../../utils/audiogramData';
 import AudiogramChart from '../../components/Audiometry/AudiogramChart';
 import AudiogramFilters from '../../components/Audiometry/AudiogramFilters';
+import CohortComparePanel, { ComparisonEntry } from '../../components/Audiometry/CohortComparePanel';
 import { Button } from 'reactstrap';
 import { FiDownload } from 'react-icons/fi';
 import LoaderIcon from '../../components/Other/LoaderIcon/LoaderIcon';
 import computeDimensions from '../../utils/computeDimensions';
 import './Audiometry.css';
 
+const COMPARISON_COLORS = [
+    'rgb(230,74,100)',
+    'rgb(40,160,100)',
+    'rgb(130,60,200)',
+];
+const CURRENT_COLOR = 'rgb(30,80,180)';
+
 interface OwnProps {}
 interface StateProps {
     queryId: string;
     cohortLoaded: boolean;
     appState: AppState;
+    savedQueries: SavedQueryRef[];
 }
 interface DispatchProps {}
 type Props = StateProps & OwnProps & DispatchProps;
+
+interface ComparisonState {
+    queryId: string;
+    label: string;
+    color: string;
+    loading: boolean;
+    error: string | null;
+    rows: AudiogramRow[];
+}
 
 interface State {
     loading: boolean;
@@ -37,9 +56,11 @@ interface State {
     filterOptions: AudiogramFilterOptions;
     selectedSides: string[];
     selectedTypes: string[];
-    summaryData: AudiogramSummaryPoint[];
     width: number;
     height: number;
+    comparisons: ComparisonState[];
+    showCurrentCohort: boolean;
+    excludeModified: boolean;
 }
 
 class Audiometry extends React.PureComponent<Props, State> {
@@ -55,9 +76,11 @@ class Audiometry extends React.PureComponent<Props, State> {
             filterOptions: { sides: [], types: [] },
             selectedSides: [],
             selectedTypes: [],
-            summaryData: [],
             width: dim.width,
-            height: dim.height
+            height: dim.height,
+            comparisons: [],
+            showCurrentCohort: true,
+            excludeModified: false
         };
     }
 
@@ -81,11 +104,10 @@ class Audiometry extends React.PureComponent<Props, State> {
     }
 
     public render() {
-        const { cohortLoaded, queryId } = this.props;
-        const { loading, error, filterOptions, selectedSides, selectedTypes, summaryData, width, height } = this.state;
+        const { cohortLoaded, savedQueries } = this.props;
+        const { loading, error, filterOptions, selectedSides, selectedTypes,
+                width, height, comparisons, showCurrentCohort, excludeModified } = this.state;
         const c = 'audiometry';
-
-        console.log('[Audiometry] render — cohortLoaded:', cohortLoaded, 'queryId:', queryId, 'prevQueryId:', this.prevQueryId, 'loading:', loading, 'error:', error, 'sides:', filterOptions.sides);
 
         if (!cohortLoaded) {
             return (
@@ -120,7 +142,17 @@ class Audiometry extends React.PureComponent<Props, State> {
         }
 
         const chartWidth = Math.max(width - 40, 400);
-        const chartHeight = Math.max(height - 120, 300);
+        const chartHeight = Math.max(height - 200, 280);
+
+        const series = this.buildSeries();
+
+        const compEntries: ComparisonEntry[] = comparisons.map(comp => ({
+            queryId: comp.queryId,
+            label: comp.label,
+            color: comp.color,
+            loading: comp.loading,
+            error: comp.error
+        }));
 
         return (
             <div className={`${c}-container scrollable-offset-by-header`}>
@@ -130,26 +162,67 @@ class Audiometry extends React.PureComponent<Props, State> {
                         availableTypes={filterOptions.types}
                         selectedSides={selectedSides}
                         selectedTypes={selectedTypes}
+                        excludeModified={excludeModified}
                         onSidesChange={this.handleSidesChange}
                         onTypesChange={this.handleTypesChange}
+                        onExcludeModifiedChange={this.handleExcludeModifiedChange}
                     />
                     <div className={`${c}-export-buttons`}>
-                        <Button size="sm" color="secondary" outline onClick={this.handleExportPlot}>
-                            <FiDownload /> Export Plot Data
-                        </Button>
-                        <Button size="sm" color="secondary" outline onClick={this.handleExportAll}>
-                            <FiDownload /> Export All Readings
+                        <Button size="sm" color="secondary" outline onClick={this.handleExport}>
+                            <FiDownload /> Export CSV
                         </Button>
                     </div>
                 </div>
-                <AudiogramChart
-                    data={summaryData}
-                    width={chartWidth}
-                    height={chartHeight}
-                />
+                <div className={`${c}-body`}>
+                    <div className={`${c}-chart-area`}>
+                        <AudiogramChart
+                            series={series}
+                            width={chartWidth}
+                            height={chartHeight}
+                        />
+                    </div>
+                    <div className={`${c}-sidebar`}>
+                        <CohortComparePanel
+                            savedQueries={savedQueries}
+                            comparisons={compEntries}
+                            showCurrentCohort={showCurrentCohort}
+                            onToggleCurrentCohort={this.handleToggleCurrentCohort}
+                            onAdd={this.handleAddComparison}
+                            onRemove={this.handleRemoveComparison}
+                        />
+                    </div>
+                </div>
             </div>
         );
     }
+
+    private buildSeries = (): AudiogramSeries[] => {
+        const { rows, selectedSides, selectedTypes, comparisons, showCurrentCohort, excludeModified } = this.state;
+
+        const result: AudiogramSeries[] = [];
+
+        if (showCurrentCohort) {
+            result.push({
+                id: 'current',
+                label: 'Current Cohort',
+                color: CURRENT_COLOR,
+                data: aggregateAudiogramData(rows, selectedSides, selectedTypes, excludeModified)
+            });
+        }
+
+        for (const comp of comparisons) {
+            if (comp.loading || comp.error || comp.rows.length === 0) continue;
+            const compData = aggregateAudiogramData(comp.rows, selectedSides, selectedTypes, excludeModified);
+            result.push({
+                id: comp.queryId,
+                label: comp.label,
+                color: comp.color,
+                data: compData
+            });
+        }
+
+        return result;
+    };
 
     private getDimensions = () => {
         try {
@@ -170,13 +243,8 @@ class Audiometry extends React.PureComponent<Props, State> {
         this.prevQueryId = queryId;
         this.setState({ loading: true, error: null });
 
-        console.log('[Audiometry] loadData called. queryId:', queryId);
-        console.log('[Audiometry] datasets.all size:', appState.datasets.all.size);
-        console.log('[Audiometry] dataset names:', Array.from(appState.datasets.all.values()).map(d => d.name));
-
         try {
             const datasetId = findAudiogramDatasetId(appState);
-            console.log('[Audiometry] found datasetId:', datasetId);
             if (!datasetId) {
                 this.setState({ loading: false, error: 'Audiogram dataset not found. Please ensure the "Audiogram Thresholds" dataset is configured.' });
                 return;
@@ -186,22 +254,17 @@ class Audiometry extends React.PureComponent<Props, State> {
             const rows = parseAudiogramData(dto);
             const filterOptions = extractFilterOptions(rows);
 
-            // Default selections: all sides and first type (or all)
             const selectedSides = filterOptions.sides.length > 0 ? [...filterOptions.sides] : [];
             const selectedTypes = filterOptions.types.length > 0 ? [filterOptions.types[0]] : [];
-
-            const summaryData = aggregateAudiogramData(rows, selectedSides, selectedTypes);
 
             this.setState({
                 loading: false,
                 rows,
                 filterOptions,
                 selectedSides,
-                selectedTypes,
-                summaryData
+                selectedTypes
             });
         } catch (err) {
-            console.error('Failed to load audiogram data:', err);
             const msg = err instanceof Error ? err.message : 'Unknown error';
             this.setState({
                 loading: false,
@@ -211,32 +274,90 @@ class Audiometry extends React.PureComponent<Props, State> {
     };
 
     private handleSidesChange = (sides: string[]) => {
-        const summaryData = aggregateAudiogramData(this.state.rows, sides, this.state.selectedTypes);
-        this.setState({ selectedSides: sides, summaryData });
+        this.setState({ selectedSides: sides });
     };
 
     private handleTypesChange = (types: string[]) => {
-        const summaryData = aggregateAudiogramData(this.state.rows, this.state.selectedSides, types);
-        this.setState({ selectedTypes: types, summaryData });
+        this.setState({ selectedTypes: types });
     };
 
-    private handleExportPlot = () => {
-        const { rows, selectedSides, selectedTypes } = this.state;
-        const filtered = getFilteredRows(rows, selectedSides, selectedTypes);
-        exportAudiogramCsv(filtered, 'audiogram_plot_data.csv');
+    private handleExcludeModifiedChange = (exclude: boolean) => {
+        this.setState({ excludeModified: exclude });
     };
 
-    private handleExportAll = () => {
-        const { rows, selectedSides, selectedTypes } = this.state;
-        const filtered = rows.filter(r =>
-            selectedSides.includes(r.side) && selectedTypes.includes(r.type)
-        );
-        exportAudiogramCsv(filtered, 'audiogram_all_readings.csv');
+    private handleAddComparison = async (queryId: string, label: string) => {
+        const { appState } = this.props;
+        const { comparisons } = this.state;
+
+        const colorIdx = comparisons.length % COMPARISON_COLORS.length;
+        const color = COMPARISON_COLORS[colorIdx];
+
+        const newComp: ComparisonState = {
+            queryId, label, color,
+            loading: true, error: null, rows: []
+        };
+
+        this.setState({ comparisons: [...comparisons, newComp] });
+
+        try {
+            const datasetId = findAudiogramDatasetId(appState);
+            if (!datasetId) throw new Error('Audiogram dataset not configured');
+
+            const dto: PatientListDatasetDTO = await fetchAudiogramData(appState, queryId, datasetId);
+            const rows = parseAudiogramData(dto);
+
+            this.setState(prev => ({
+                comparisons: prev.comparisons.map(c =>
+                    c.queryId === queryId
+                        ? { ...c, loading: false, rows }
+                        : c
+                )
+            }));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            this.setState(prev => ({
+                comparisons: prev.comparisons.map(c =>
+                    c.queryId === queryId
+                        ? { ...c, loading: false, error: msg }
+                        : c
+                )
+            }));
+        }
+    };
+
+    private handleToggleCurrentCohort = () => {
+        this.setState(prev => ({ showCurrentCohort: !prev.showCurrentCohort }));
+    };
+
+    private handleRemoveComparison = (queryId: string) => {
+        this.setState(prev => ({
+            comparisons: prev.comparisons.filter(c => c.queryId !== queryId)
+        }));
+    };
+
+    private handleExport = () => {
+        const { rows, selectedSides, selectedTypes, comparisons, showCurrentCohort, excludeModified } = this.state;
+
+        const entries: Array<{ label: string; rows: AudiogramRow[] }> = [];
+
+        if (showCurrentCohort) {
+            entries.push({ label: 'Current Cohort', rows: getFilteredRows(rows, selectedSides, selectedTypes, excludeModified) });
+        }
+
+        for (const comp of comparisons) {
+            if (!comp.loading && !comp.error && comp.rows.length > 0) {
+                entries.push({
+                    label: comp.label,
+                    rows: getFilteredRows(comp.rows, selectedSides, selectedTypes, excludeModified)
+                });
+            }
+        }
+
+        exportMultiSeriesCsv(entries, 'audiogram_export.csv');
     };
 }
 
 const mapStateToProps = (state: AppState): StateProps => {
-    // queryId lives on individual network cohort entries, not the top-level count
     let queryId = '';
     state.responders.forEach((nr) => {
         const nc = state.cohort.networkCohorts.get(nr.id);
@@ -244,10 +365,15 @@ const mapStateToProps = (state: AppState): StateProps => {
             queryId = nc.count.queryId;
         }
     });
+
+    const savedQueries: SavedQueryRef[] = [];
+    state.queries.saved.forEach((q) => savedQueries.push(q));
+
     return {
         queryId,
         cohortLoaded: state.cohort.count.state === CohortStateType.LOADED,
-        appState: state
+        appState: state,
+        savedQueries
     };
 };
 

@@ -7,10 +7,10 @@ import {
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, ReferenceArea
 } from 'recharts';
-import { AudiogramSummaryPoint } from '../../utils/audiogramData';
+import { AudiogramSeries, AudiogramSummaryPoint } from '../../utils/audiogramData';
 
 interface Props {
-    data: AudiogramSummaryPoint[];
+    series: AudiogramSeries[];
     width: number;
     height: number;
 }
@@ -27,73 +27,116 @@ const SEVERITY_BANDS = [
 export default class AudiogramChart extends React.PureComponent<Props> {
 
     public render() {
-        const { data, width, height } = this.props;
+        const { series, height } = this.props;
 
-        // Transform data for recharts Area (needs [p25, p75] range)
-        const chartData = data.map(d => ({
-            ...d,
-            percentileRange: d.p25 != null && d.p75 != null ? [d.p25, d.p75] : [null, null]
-        }));
+        if (!series || series.length === 0) {
+            return null;
+        }
+
+        // Build merged chartData: one entry per frequency label
+        // Each series contributes mean_N and range_N keys
+        const freqCount = series[0].data.length;
+        const chartData: any[] = [];
+        for (let fi = 0; fi < freqCount; fi++) {
+            const point: any = { label: series[0].data[fi].label };
+            series.forEach((s, si) => {
+                const d = s.data[fi];
+                point[`mean_${si}`] = d ? d.mean : null;
+                point[`range_${si}`] = d && d.p25 != null && d.p75 != null
+                    ? [d.p25, d.p75]
+                    : [null, null];
+                point[`_data_${si}`] = d;
+            });
+            chartData.push(point);
+        }
 
         return (
-            <ResponsiveContainer width={width} height={height}>
-                <ComposedChart data={chartData} margin={{ top: 20, right: 30, bottom: 20, left: 20 }}>
+            <div>
+                <ResponsiveContainer width="100%" height={height}>
+                    <ComposedChart data={chartData} margin={{ top: 20, right: 30, bottom: 30, left: 20 }}>
 
-                    {/* Severity bands */}
-                    {SEVERITY_BANDS.map((band, i) => (
-                        <ReferenceArea
-                            key={i}
-                            y1={band.y1}
-                            y2={band.y2}
-                            fill={band.fill}
-                            fillOpacity={1}
-                            label={band.label}
+                        {/* Severity bands */}
+                        {SEVERITY_BANDS.map((band, i) => (
+                            <ReferenceArea
+                                key={i}
+                                y1={band.y1}
+                                y2={band.y2}
+                                fill={band.fill}
+                                fillOpacity={1}
+                                label={band.label}
+                            />
+                        ))}
+
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+
+                        <XAxis
+                            dataKey="label"
+                            type="category"
+                            interval={0}
+                            axisLine={{ stroke: '#666' }}
+                            tick={{ fontSize: 12 }}
+                            label={{ value: 'Frequency (Hz)', position: 'insideBottom', offset: -15, fontSize: 13 }}
                         />
-                    ))}
 
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
+                        <YAxis
+                            reversed={true}
+                            domain={[-10, 120]}
+                            ticks={[-10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]}
+                            axisLine={{ stroke: '#666' }}
+                            tick={{ fontSize: 12 }}
+                            label={{ value: 'Hearing Level (dB HL)', angle: -90, position: 'insideLeft', offset: 5, fontSize: 13 }}
+                        />
 
-                    <XAxis
-                        dataKey="label"
-                        type="category"
-                        interval={0}
-                        axisLine={{ stroke: '#666' }}
-                        tick={{ fontSize: 12 }}
-                        label={{ value: 'Frequency (Hz)', position: 'insideBottom', offset: -10, fontSize: 13 }}
-                    />
+                        {/* Per-series areas and lines */}
+                        {series.map((s, si) => {
+                            const isFirst = si === 0;
+                            const fillRgba = this.colorToRgba(s.color, 0.2);
+                            return [
+                                <Area
+                                    key={`area_${si}`}
+                                    dataKey={`range_${si}`}
+                                    type="monotone"
+                                    fill={fillRgba}
+                                    stroke="none"
+                                    connectNulls={false}
+                                />,
+                                <Line
+                                    key={`line_${si}`}
+                                    dataKey={`mean_${si}`}
+                                    type="monotone"
+                                    stroke={s.color}
+                                    strokeWidth={2}
+                                    strokeDasharray={isFirst ? undefined : '6 3'}
+                                    dot={{ r: 4, fill: s.color }}
+                                    connectNulls={false}
+                                    name={s.label}
+                                />
+                            ];
+                        })}
 
-                    <YAxis
-                        reversed={true}
-                        domain={[-10, 120]}
-                        ticks={[-10, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]}
-                        axisLine={{ stroke: '#666' }}
-                        tick={{ fontSize: 12 }}
-                        label={{ value: 'Hearing Level (dB HL)', angle: -90, position: 'insideLeft', offset: 5, fontSize: 13 }}
-                    />
+                        <Tooltip content={this.renderTooltip} />
+                    </ComposedChart>
+                </ResponsiveContainer>
 
-                    {/* 25th-75th percentile band */}
-                    <Area
-                        dataKey="percentileRange"
-                        type="monotone"
-                        fill="rgba(100, 150, 220, 0.25)"
-                        stroke="none"
-                        connectNulls={false}
-                    />
-
-                    {/* Mean line */}
-                    <Line
-                        dataKey="mean"
-                        type="monotone"
-                        stroke="rgb(30, 80, 180)"
-                        strokeWidth={2}
-                        dot={{ r: 4, fill: 'rgb(30, 80, 180)' }}
-                        connectNulls={false}
-                        name="Mean"
-                    />
-
-                    <Tooltip content={this.renderTooltip} />
-                </ComposedChart>
-            </ResponsiveContainer>
+                {/* Legend */}
+                {series.length > 1 && (
+                    <div className="audiogram-legend">
+                        {series.map((s, si) => (
+                            <div key={si} className="audiogram-legend-item">
+                                <svg width="28" height="12">
+                                    <line
+                                        x1="0" y1="6" x2="28" y2="6"
+                                        stroke={s.color}
+                                        strokeWidth="2.5"
+                                        strokeDasharray={si === 0 ? undefined : '6 3'}
+                                    />
+                                </svg>
+                                <span>{s.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         );
     }
 
@@ -101,16 +144,43 @@ export default class AudiogramChart extends React.PureComponent<Props> {
         const { active, payload } = props;
         if (!active || !payload || !payload.length) return null;
 
-        const data = payload[0]?.payload as AudiogramSummaryPoint;
-        if (!data || data.mean == null) return null;
+        const { series } = this.props;
+        const rawPoint = payload[0]?.payload;
+        if (!rawPoint) return null;
+
+        // Find a freq label from first series
+        const freqLabel = rawPoint.label;
+        const hasAny = series.some((_, si) => rawPoint[`_data_${si}`]?.mean != null);
+        if (!hasAny) return null;
 
         return (
             <div className="audiogram-tooltip">
-                <div className="audiogram-tooltip-header">{data.frequency} Hz</div>
-                <div>Mean: <strong>{data.mean} dB</strong></div>
-                <div>25th–75th: {data.p25} – {data.p75} dB</div>
-                <div>Patients: {data.count}</div>
+                <div className="audiogram-tooltip-header">{freqLabel} Hz</div>
+                {series.map((s, si) => {
+                    const d = rawPoint[`_data_${si}`] as AudiogramSummaryPoint | undefined;
+                    if (!d || d.mean == null) return null;
+                    return (
+                        <div key={si} className="audiogram-tooltip-series">
+                            <span className="audiogram-tooltip-dot" style={{ background: s.color }} />
+                            <strong>{s.label}:</strong>&nbsp;
+                            {d.mean} dB&nbsp;
+                            <span className="audiogram-tooltip-range">
+                                (P25–P75: {d.p25}–{d.p75})
+                            </span>
+                            &nbsp;<span className="audiogram-tooltip-count">n={d.count}</span>
+                        </div>
+                    );
+                })}
             </div>
         );
+    };
+
+    /** Convert 'rgb(r,g,b)' or '#rrggbb' to 'rgba(r,g,b,alpha)' */
+    private colorToRgba = (color: string, alpha: number): string => {
+        const rgb = color.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+            return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+        }
+        return color;
     };
 }

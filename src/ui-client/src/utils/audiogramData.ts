@@ -13,12 +13,19 @@ const FREQ_KEYS: Record<Frequency, string> = {
     4000: 'T4000', 6000: 'T6000', 8000: 'T8000'
 };
 
+const FREQ_MOD_KEYS: Record<Frequency, string> = {
+    125: 'T125_mod', 250: 'T250_mod', 500: 'T500_mod', 750: 'T750_mod',
+    1000: 'T1000_mod', 1500: 'T1500_mod', 2000: 'T2000_mod', 3000: 'T3000_mod',
+    4000: 'T4000_mod', 6000: 'T6000_mod', 8000: 'T8000_mod'
+};
+
 export interface AudiogramRow {
     personId: string;
     testDate: string;
     side: string;
     type: string;
     thresholds: Map<Frequency, number | null>;
+    modifiers: Map<Frequency, string | null>;
 }
 
 export interface AudiogramSummaryPoint {
@@ -35,6 +42,13 @@ export interface AudiogramFilterOptions {
     types: string[];
 }
 
+export interface AudiogramSeries {
+    id: string;       // 'current' or saved query id
+    label: string;    // display name
+    color: string;    // hex or rgb
+    data: AudiogramSummaryPoint[];
+}
+
 /**
  * Parse raw Leaf dataset DTO into typed audiogram rows.
  */
@@ -49,11 +63,13 @@ export const parseAudiogramData = (dto: PatientListDatasetDTO): AudiogramRow[] =
         for (const row of patientRows) {
             const r = row as any;
             const thresholds = new Map<Frequency, number | null>();
+            const modifiers = new Map<Frequency, string | null>();
 
             for (const freq of FREQUENCIES) {
-                const key = FREQ_KEYS[freq];
-                const val = r[key];
+                const val = r[FREQ_KEYS[freq]];
                 thresholds.set(freq, val != null ? Number(val) : null);
+                const mod = r[FREQ_MOD_KEYS[freq]];
+                modifiers.set(freq, mod != null ? String(mod) : null);
             }
 
             rows.push({
@@ -61,7 +77,8 @@ export const parseAudiogramData = (dto: PatientListDatasetDTO): AudiogramRow[] =
                 testDate: r.testDate || r.TestDate || '',
                 side: (r.side || r.Side || '').toUpperCase(),
                 type: (r.type || r.Type || '').toUpperCase(),
-                thresholds
+                thresholds,
+                modifiers
             });
         }
     }
@@ -85,6 +102,17 @@ export const extractFilterOptions = (rows: AudiogramRow[]): AudiogramFilterOptio
 };
 
 /**
+ * Returns true if any modifier field on the row is non-null and non-empty.
+ */
+export const rowHasAnyModifier = (row: AudiogramRow): boolean => {
+    for (const freq of FREQUENCIES) {
+        const mod = row.modifiers.get(freq);
+        if (mod != null && mod !== '') return true;
+    }
+    return false;
+};
+
+/**
  * Aggregate audiogram data into summary statistics for charting.
  *
  * Logic:
@@ -96,12 +124,14 @@ export const extractFilterOptions = (rows: AudiogramRow[]): AudiogramFilterOptio
 export const aggregateAudiogramData = (
     rows: AudiogramRow[],
     selectedSides: string[],
-    selectedTypes: string[]
+    selectedTypes: string[],
+    excludeModified: boolean = false
 ): AudiogramSummaryPoint[] => {
 
     // 1. Filter
     const filtered = rows.filter(r =>
-        selectedSides.includes(r.side) && selectedTypes.includes(r.type)
+        selectedSides.includes(r.side) && selectedTypes.includes(r.type) &&
+        (!excludeModified || !rowHasAnyModifier(r))
     );
 
     // 2. Group by patient+side+type, pick most recent
@@ -174,10 +204,12 @@ export const aggregateAudiogramData = (
 export const getFilteredRows = (
     rows: AudiogramRow[],
     selectedSides: string[],
-    selectedTypes: string[]
+    selectedTypes: string[],
+    excludeModified: boolean = false
 ): AudiogramRow[] => {
     const filtered = rows.filter(r =>
-        selectedSides.includes(r.side) && selectedTypes.includes(r.type)
+        selectedSides.includes(r.side) && selectedTypes.includes(r.type) &&
+        (!excludeModified || !rowHasAnyModifier(r))
     );
     const grouped = new Map<string, AudiogramRow>();
     for (const row of filtered) {
@@ -192,14 +224,25 @@ export const getFilteredRows = (
 
 /**
  * Export audiogram rows to CSV and trigger download.
+ * Optionally includes a cohortLabel column when exporting across multiple cohorts.
  */
-export const exportAudiogramCsv = (rows: AudiogramRow[], filename: string = 'audiogram_export.csv') => {
-    const headers = ['personId', 'testDate', 'side', 'type',
-        ...FREQUENCIES.map(f => `T${f}`)];
+export const exportAudiogramCsv = (
+    rows: AudiogramRow[],
+    filename: string = 'audiogram_export.csv',
+    cohortLabel?: string
+) => {
+    const includeCohort = cohortLabel !== undefined;
+    const headers = [
+        ...(includeCohort ? ['cohort'] : []),
+        'personId', 'testDate', 'side', 'type',
+        ...FREQUENCIES.map(f => `T${f}`),
+        ...FREQUENCIES.map(f => `T${f}_mod`)
+    ];
     const csvRows = [headers.join(',')];
 
     for (const row of rows) {
         const vals = [
+            ...(includeCohort ? [cohortLabel!] : []),
             row.personId,
             row.testDate,
             row.side,
@@ -207,11 +250,49 @@ export const exportAudiogramCsv = (rows: AudiogramRow[], filename: string = 'aud
             ...FREQUENCIES.map(f => {
                 const v = row.thresholds.get(f);
                 return v != null ? String(v) : '';
-            })
+            }),
+            ...FREQUENCIES.map(f => row.modifiers.get(f) ?? '')
         ];
         csvRows.push(vals.join(','));
     }
 
+    triggerCsvDownload(csvRows, filename);
+};
+
+/**
+ * Export multiple series (current cohort + comparisons) into one CSV with a cohort column.
+ */
+export const exportMultiSeriesCsv = (
+    entries: Array<{ label: string; rows: AudiogramRow[] }>,
+    filename: string = 'audiogram_export.csv'
+) => {
+    const headers = ['cohort', 'personId', 'testDate', 'side', 'type',
+        ...FREQUENCIES.map(f => `T${f}`),
+        ...FREQUENCIES.map(f => `T${f}_mod`)];
+    const csvRows = [headers.join(',')];
+
+    for (const { label, rows } of entries) {
+        for (const row of rows) {
+            const vals = [
+                label,
+                row.personId,
+                row.testDate,
+                row.side,
+                row.type,
+                ...FREQUENCIES.map(f => {
+                    const v = row.thresholds.get(f);
+                    return v != null ? String(v) : '';
+                }),
+                ...FREQUENCIES.map(f => row.modifiers.get(f) ?? '')
+            ];
+            csvRows.push(vals.join(','));
+        }
+    }
+
+    triggerCsvDownload(csvRows, filename);
+};
+
+const triggerCsvDownload = (csvRows: string[], filename: string) => {
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
