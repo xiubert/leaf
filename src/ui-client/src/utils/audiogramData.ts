@@ -26,6 +26,7 @@ export interface AudiogramRow {
     type: string;
     thresholds: Map<Frequency, number | null>;
     modifiers: Map<Frequency, string | null>;
+    ptaLax: number | null;
 }
 
 export interface AudiogramSummaryPoint {
@@ -42,11 +43,19 @@ export interface AudiogramFilterOptions {
     types: string[];
 }
 
+export interface PtaSummary {
+    mean: number | null;
+    p25: number | null;
+    p75: number | null;
+    count: number;
+}
+
 export interface AudiogramSeries {
     id: string;       // 'current' or saved query id
     label: string;    // display name
     color: string;    // hex or rgb
     data: AudiogramSummaryPoint[];
+    pta?: PtaSummary;
 }
 
 /**
@@ -72,13 +81,15 @@ export const parseAudiogramData = (dto: PatientListDatasetDTO): AudiogramRow[] =
                 modifiers.set(freq, mod != null ? String(mod) : null);
             }
 
+            const ptaRaw = r.PTA_lax ?? r.pta_lax ?? r.ptaLax;
             rows.push({
                 personId,
                 testDate: r.testDate || r.TestDate || '',
                 side: (r.side || r.Side || '').toUpperCase(),
                 type: (r.type || r.Type || '').toUpperCase(),
                 thresholds,
-                modifiers
+                modifiers,
+                ptaLax: ptaRaw != null ? Number(ptaRaw) : null
             });
         }
     }
@@ -110,6 +121,54 @@ export const rowHasAnyModifier = (row: AudiogramRow): boolean => {
         if (mod != null && mod !== '') return true;
     }
     return false;
+};
+
+/**
+ * Compute population statistics for PTA_lax across the filtered/grouped row set.
+ * Applies the same side/type/modifier filtering as aggregateAudiogramData.
+ */
+export const computePtaSummary = (
+    rows: AudiogramRow[],
+    selectedSides: string[],
+    selectedTypes: string[],
+    excludeModified: boolean = false
+): PtaSummary => {
+    const filtered = rows.filter(r =>
+        selectedSides.includes(r.side) && selectedTypes.includes(r.type) &&
+        (!excludeModified || !rowHasAnyModifier(r))
+    );
+
+    // Most-recent per combo
+    const grouped = new Map<string, AudiogramRow>();
+    for (const row of filtered) {
+        const key = `${row.personId}|${row.side}|${row.type}`;
+        const existing = grouped.get(key);
+        if (!existing || row.testDate > existing.testDate) grouped.set(key, row);
+    }
+
+    // Per-patient: average PTA across combos (if multiple sides/types selected)
+    const patientPtas = new Map<string, number[]>();
+    for (const row of grouped.values()) {
+        if (row.ptaLax == null) continue;
+        if (!patientPtas.has(row.personId)) patientPtas.set(row.personId, []);
+        patientPtas.get(row.personId)!.push(row.ptaLax);
+    }
+
+    const allPtas: number[] = [];
+    for (const vals of patientPtas.values()) {
+        allPtas.push(vals.reduce((a, b) => a + b, 0) / vals.length);
+    }
+
+    if (allPtas.length === 0) return { mean: null, p25: null, p75: null, count: 0 };
+
+    allPtas.sort((a, b) => a - b);
+    const mean = allPtas.reduce((a, b) => a + b, 0) / allPtas.length;
+    return {
+        mean: Math.round(mean * 10) / 10,
+        p25: Math.round(percentile(allPtas, 0.25) * 10) / 10,
+        p75: Math.round(percentile(allPtas, 0.75) * 10) / 10,
+        count: allPtas.length
+    };
 };
 
 /**
@@ -236,7 +295,8 @@ export const exportAudiogramCsv = (
         ...(includeCohort ? ['cohort'] : []),
         'personId', 'testDate', 'side', 'type',
         ...FREQUENCIES.map(f => `T${f}`),
-        ...FREQUENCIES.map(f => `T${f}_mod`)
+        ...FREQUENCIES.map(f => `T${f}_mod`),
+        'PTA_lax'
     ];
     const csvRows = [headers.join(',')];
 
@@ -251,7 +311,8 @@ export const exportAudiogramCsv = (
                 const v = row.thresholds.get(f);
                 return v != null ? String(v) : '';
             }),
-            ...FREQUENCIES.map(f => row.modifiers.get(f) ?? '')
+            ...FREQUENCIES.map(f => row.modifiers.get(f) ?? ''),
+            row.ptaLax != null ? String(row.ptaLax) : ''
         ];
         csvRows.push(vals.join(','));
     }
@@ -268,7 +329,8 @@ export const exportMultiSeriesCsv = (
 ) => {
     const headers = ['cohort', 'personId', 'testDate', 'side', 'type',
         ...FREQUENCIES.map(f => `T${f}`),
-        ...FREQUENCIES.map(f => `T${f}_mod`)];
+        ...FREQUENCIES.map(f => `T${f}_mod`),
+        'PTA_lax'];
     const csvRows = [headers.join(',')];
 
     for (const { label, rows } of entries) {
@@ -283,7 +345,8 @@ export const exportMultiSeriesCsv = (
                     const v = row.thresholds.get(f);
                     return v != null ? String(v) : '';
                 }),
-                ...FREQUENCIES.map(f => row.modifiers.get(f) ?? '')
+                ...FREQUENCIES.map(f => row.modifiers.get(f) ?? ''),
+                row.ptaLax != null ? String(row.ptaLax) : ''
             ];
             csvRows.push(vals.join(','));
         }

@@ -11,7 +11,7 @@ import { PatientListDatasetDTO } from '../../models/patientList/Dataset';
 import { findAudiogramDatasetId, fetchAudiogramData } from '../../services/audiometryApi';
 import {
     AudiogramRow, AudiogramFilterOptions, AudiogramSeries,
-    parseAudiogramData, extractFilterOptions, aggregateAudiogramData,
+    parseAudiogramData, extractFilterOptions, aggregateAudiogramData, computePtaSummary,
     getFilteredRows, exportMultiSeriesCsv
 } from '../../utils/audiogramData';
 import AudiogramChart from '../../components/Audiometry/AudiogramChart';
@@ -206,18 +206,19 @@ class Audiometry extends React.PureComponent<Props, State> {
                 id: 'current',
                 label: 'Current Cohort',
                 color: CURRENT_COLOR,
-                data: aggregateAudiogramData(rows, selectedSides, selectedTypes, excludeModified)
+                data: aggregateAudiogramData(rows, selectedSides, selectedTypes, excludeModified),
+                pta: computePtaSummary(rows, selectedSides, selectedTypes, excludeModified)
             });
         }
 
         for (const comp of comparisons) {
             if (comp.loading || comp.error || comp.rows.length === 0) continue;
-            const compData = aggregateAudiogramData(comp.rows, selectedSides, selectedTypes, excludeModified);
             result.push({
                 id: comp.queryId,
                 label: comp.label,
                 color: comp.color,
-                data: compData
+                data: aggregateAudiogramData(comp.rows, selectedSides, selectedTypes, excludeModified),
+                pta: computePtaSummary(comp.rows, selectedSides, selectedTypes, excludeModified)
             });
         }
 
