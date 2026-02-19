@@ -45,9 +45,11 @@ export interface AudiogramFilterOptions {
 
 export interface PtaSummary {
     mean: number | null;
+    median: number | null;
     p25: number | null;
     p75: number | null;
     count: number;
+    values: number[];   // sorted per-patient PTA values for box plot / strip plot
 }
 
 export interface AudiogramSeries {
@@ -159,15 +161,17 @@ export const computePtaSummary = (
         allPtas.push(vals.reduce((a, b) => a + b, 0) / vals.length);
     }
 
-    if (allPtas.length === 0) return { mean: null, p25: null, p75: null, count: 0 };
+    if (allPtas.length === 0) return { mean: null, median: null, p25: null, p75: null, count: 0, values: [] };
 
     allPtas.sort((a, b) => a - b);
     const mean = allPtas.reduce((a, b) => a + b, 0) / allPtas.length;
     return {
-        mean: Math.round(mean * 10) / 10,
-        p25: Math.round(percentile(allPtas, 0.25) * 10) / 10,
-        p75: Math.round(percentile(allPtas, 0.75) * 10) / 10,
-        count: allPtas.length
+        mean:   Math.round(mean * 10) / 10,
+        median: Math.round(percentile(allPtas, 0.50) * 10) / 10,
+        p25:    Math.round(percentile(allPtas, 0.25) * 10) / 10,
+        p75:    Math.round(percentile(allPtas, 0.75) * 10) / 10,
+        count:  allPtas.length,
+        values: allPtas   // already sorted
     };
 };
 

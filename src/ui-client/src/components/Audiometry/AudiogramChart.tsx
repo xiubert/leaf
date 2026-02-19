@@ -6,7 +6,7 @@ import React from 'react';
 import {
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, ReferenceArea,
-    BarChart, Bar, Cell, ErrorBar
+    BarChart, Bar
 } from 'recharts';
 import { AudiogramSeries, AudiogramSummaryPoint } from '../../utils/audiogramData';
 
@@ -54,18 +54,16 @@ export default class AudiogramChart extends React.PureComponent<Props> {
         // PTA bar data: one entry per series that has pta data
         const ptaBarData = series
             .filter(s => s.pta?.mean != null)
-            .map(s => {
-                const mean = s.pta!.mean!;
-                const p25  = s.pta!.p25;
-                const p75  = s.pta!.p75;
-                // ErrorBar [up, down] in value units. Y-axis is reversed so
-                // "up" (smaller y-pixel) = smaller dB = toward P25,
-                // "down" (larger y-pixel)  = larger dB = toward P75.
-                const errorRange = (p25 != null && p75 != null)
-                    ? [mean - p25, p75 - mean]   // [toward P25, toward P75]
-                    : undefined;
-                return { label: s.label, value: mean, p25, p75, count: s.pta!.count, color: s.color, errorRange };
-            });
+            .map(s => ({
+                label:  s.label,
+                value:  s.pta!.mean!,
+                median: s.pta!.median,
+                p25:    s.pta!.p25,
+                p75:    s.pta!.p75,
+                count:  s.pta!.count,
+                values: s.pta!.values,
+                color:  s.color
+            }));
 
         return (
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
@@ -185,17 +183,7 @@ export default class AudiogramChart extends React.PureComponent<Props> {
                                     label={{ value: 'dB HL', angle: -90, position: 'insideLeft', offset: 8, fontSize: 11 }}
                                 />
                                 <Tooltip content={this.renderPtaTooltip} />
-                                <Bar dataKey="value" isAnimationActive={false}>
-                                    <ErrorBar
-                                        dataKey="errorRange"
-                                        width={5}
-                                        strokeWidth={1.5}
-                                        stroke="rgba(0,0,0,0.45)"
-                                    />
-                                    {ptaBarData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} fillOpacity={0.85} />
-                                    ))}
-                                </Bar>
+                                <Bar dataKey="value" isAnimationActive={false} shape={this.renderPtaBox} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -203,6 +191,108 @@ export default class AudiogramChart extends React.PureComponent<Props> {
             </div>
         );
     }
+
+    /**
+     * Custom bar shape: box plot (P25–P75 box + median line + 1.5×IQR whiskers) with jitter dots.
+     *
+     * Coordinate math for reversed Y-axis (0 dB at top, 120 dB at bottom):
+     *   y           = pixel position of dB=0 (baseline / top of chart area)
+     *   y+barHeight = pixel position of dB=mean
+     *   toPixelY(v) = y + (v / mean) * barHeight
+     *
+     * Robustness notes:
+     *   - recharts may not pass array fields through the shape props; fall back
+     *     to looking up the matching AudiogramSeries from this.props.series.
+     *   - A reversed-axis BarChart can emit a negative height; normalise it.
+     */
+    private renderPtaBox = (props: any) => {
+        let { y, height: barHeight } = props;
+        const { x, width } = props;
+
+        // Normalise: reversed-axis bars can arrive with negative height
+        if (barHeight < 0) { y = y + barHeight; barHeight = -barHeight; }
+
+        // Look up full PTA data from the series prop.
+        // recharts does not reliably forward array-valued data fields, so we
+        // match the entry by color (a primitive string that is passed reliably).
+        const propColor = props.color as string | undefined;
+        const match     = this.props.series.find(s => s.color === propColor);
+        const pta       = match?.pta;
+
+        const mean   = pta?.mean   ?? (props.value as number | null) ?? null;
+        const median = pta?.median ?? null;
+        const p25    = pta?.p25    ?? null;
+        const p75    = pta?.p75    ?? null;
+        const values = pta?.values ?? [];
+        const color  = propColor ?? match?.color ?? '#888';
+
+        if (mean == null || barHeight < 1 || values.length === 0) {
+            return <g />;
+        }
+
+        const toPixelY = (dB: number) => y + (dB / mean) * barHeight;
+
+        // 1.5 × IQR whiskers, clamped to actual data min/max
+        const iqr     = (p75 ?? mean) - (p25 ?? mean);
+        const sorted  = values as number[];
+        const wLow    = Math.max(sorted[0],                   (p25 ?? mean) - 1.5 * iqr);
+        const wHigh   = Math.min(sorted[sorted.length - 1],   (p75 ?? mean) + 1.5 * iqr);
+
+        const yWLow  = toPixelY(wLow);
+        const yP25   = toPixelY(p25 ?? mean);
+        const yMed   = toPixelY(median ?? mean);
+        const yP75   = toPixelY(p75 ?? mean);
+        const yWHigh = toPixelY(wHigh);
+
+        const cx       = x + width / 2;
+        const boxLeft  = x + width * 0.2;
+        const boxRight = x + width * 0.8;
+        const boxW     = boxRight - boxLeft;
+        const capHalf  = boxW * 0.35;
+
+        // Seeded, deterministic jitter in ±40 % of box width
+        const jitter = (i: number, v: number) => {
+            const t = Math.sin(i * 12.9898 + v * 43.758) * 43758.5453;
+            return (t - Math.floor(t) - 0.5) * boxW * 0.8;
+        };
+
+        const MAX_DOTS = 400;
+        const step = sorted.length > MAX_DOTS ? Math.ceil(sorted.length / MAX_DOTS) : 1;
+
+        return (
+            <g>
+                {/* Jitter dots (rendered first, behind box) */}
+                {sorted
+                    .filter((_, i) => i % step === 0)
+                    .map((v, i) => (
+                        <circle
+                            key={i}
+                            cx={cx + jitter(i, v)}
+                            cy={toPixelY(v)}
+                            r={1.5}
+                            fill={color}
+                            fillOpacity={0.25}
+                            stroke="none"
+                        />
+                    ))
+                }
+                {/* Upper whisker — toward better hearing (small dB, visually up) */}
+                <line x1={cx} y1={yWLow} x2={cx} y2={yP25} stroke={color} strokeWidth={1.5} />
+                <line x1={cx - capHalf} y1={yWLow} x2={cx + capHalf} y2={yWLow} stroke={color} strokeWidth={1.5} />
+                {/* IQR box */}
+                <rect
+                    x={boxLeft} y={yP25} width={boxW} height={yP75 - yP25}
+                    fill={color} fillOpacity={0.2}
+                    stroke={color} strokeWidth={1.5}
+                />
+                {/* Median line */}
+                <line x1={boxLeft} y1={yMed} x2={boxRight} y2={yMed} stroke={color} strokeWidth={2.5} />
+                {/* Lower whisker — toward worse hearing (large dB, visually down) */}
+                <line x1={cx} y1={yP75} x2={cx} y2={yWHigh} stroke={color} strokeWidth={1.5} />
+                <line x1={cx - capHalf} y1={yWHigh} x2={cx + capHalf} y2={yWHigh} stroke={color} strokeWidth={1.5} />
+            </g>
+        );
+    };
 
     private renderAudiogramTooltip = (props: any) => {
         const { active, payload } = props;
@@ -246,7 +336,8 @@ export default class AudiogramChart extends React.PureComponent<Props> {
                 <div className="audiogram-tooltip-header">{d.label} — PTA</div>
                 <div className="audiogram-tooltip-series">
                     <span className="audiogram-tooltip-dot" style={{ background: d.color }} />
-                    Mean: <strong>{d.value} dB</strong>&nbsp;
+                    Median: <strong>{d.median} dB</strong>&nbsp;
+                    Mean: {d.value} dB&nbsp;
                     <span className="audiogram-tooltip-range">(P25–P75: {d.p25}–{d.p75})</span>
                     &nbsp;<span className="audiogram-tooltip-count">n={d.count}</span>
                 </div>
