@@ -80,7 +80,7 @@ class Audiometry extends React.PureComponent<Props, State> {
             height: dim.height,
             comparisons: [],
             showCurrentCohort: true,
-            excludeModified: false
+            excludeModified: true
         };
     }
 
@@ -256,7 +256,10 @@ class Audiometry extends React.PureComponent<Props, State> {
             const filterOptions = extractFilterOptions(rows);
 
             const selectedSides = filterOptions.sides.length > 0 ? [...filterOptions.sides] : [];
-            const selectedTypes = filterOptions.types.length > 0 ? [filterOptions.types[0]] : [];
+            const airType = filterOptions.types.find(t => t === 'AIR');
+            const selectedTypes = filterOptions.types.length > 0
+                ? (airType ? ['AIR'] : [filterOptions.types[0]])
+                : [];
 
             this.setState({
                 loading: false,
