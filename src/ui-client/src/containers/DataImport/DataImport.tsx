@@ -16,6 +16,7 @@ import { GeneralUiState } from '../../models/state/GeneralUiState';
 interface StateProps {
     dataImport: ImportState;
     generalUi: GeneralUiState;
+    isIdentified: boolean;
 }
 interface DispatchProps {
     dispatch: any;
@@ -26,11 +27,11 @@ type Props = StateProps & DispatchProps & OwnProps;
 
 class DataImportContainer extends React.PureComponent<Props> {
     public render() {
-        const { dataImport, dispatch, generalUi } = this.props;
+        const { dataImport, dispatch, generalUi, isIdentified } = this.props;
 
         return ([
             <REDCapImportModal data={dataImport} dispatch={dispatch} show={generalUi.showImportRedcapModal} key={1} />,
-            <MrnImportModal data={dataImport} dispatch={dispatch} show={generalUi.showImportMrnModal} key={2} />
+            <MrnImportModal data={dataImport} dispatch={dispatch} isIdentified={isIdentified} show={generalUi.showImportMrnModal} key={2} />
         ]);
     }
 };
@@ -38,7 +39,8 @@ class DataImportContainer extends React.PureComponent<Props> {
 const mapStateToProps = (state: AppState): StateProps => {
     return {
         dataImport: state.dataImport,
-        generalUi: state.generalUi
+        generalUi: state.generalUi,
+        isIdentified: state.session.attestation?.isIdentified ?? false
     };
 }
 

@@ -46,6 +46,11 @@
     font-size: 1.0rem;
 }
 
+.import-mrn-mode-disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
 /* Name input */
 .import-mrn-name-label,
 .import-mrn-ids-label {
