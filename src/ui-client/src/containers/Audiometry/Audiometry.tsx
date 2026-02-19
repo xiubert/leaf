@@ -169,7 +169,10 @@ class Audiometry extends React.PureComponent<Props, State> {
                     />
                     <div className={`${c}-export-buttons`}>
                         <Button size="sm" color="secondary" outline onClick={this.handleExport}>
-                            <FiDownload /> Export CSV
+                            <FiDownload /> Export Plot CSV
+                        </Button>
+                        <Button size="sm" color="secondary" outline onClick={this.handleExportAll}>
+                            <FiDownload /> Export All CSV
                         </Button>
                     </div>
                 </div>
@@ -358,6 +361,26 @@ class Audiometry extends React.PureComponent<Props, State> {
         }
 
         exportMultiSeriesCsv(entries, 'audiogram_export.csv');
+    };
+
+    /** Export every raw row for each visible cohort — no side/type/modifier filtering,
+     *  no deduplication to most-recent visit. All audiogram records are included. */
+    private handleExportAll = () => {
+        const { rows, comparisons, showCurrentCohort } = this.state;
+
+        const entries: Array<{ label: string; rows: AudiogramRow[] }> = [];
+
+        if (showCurrentCohort) {
+            entries.push({ label: 'Current Cohort', rows });
+        }
+
+        for (const comp of comparisons) {
+            if (!comp.loading && !comp.error && comp.rows.length > 0) {
+                entries.push({ label: comp.label, rows: comp.rows });
+            }
+        }
+
+        exportMultiSeriesCsv(entries, 'audiogram_export_all.csv');
     };
 }
 
