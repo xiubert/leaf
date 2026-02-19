@@ -8,6 +8,7 @@ import {
     Tooltip, ResponsiveContainer, ReferenceArea,
     BarChart, Bar
 } from 'recharts';
+import { FiDownload } from 'react-icons/fi';
 import { AudiogramSeries, AudiogramSummaryPoint } from '../../utils/audiogramData';
 
 interface Props {
@@ -27,6 +28,57 @@ const SEVERITY_BANDS = [
 
 
 export default class AudiogramChart extends React.PureComponent<Props> {
+
+    private audiogramRef = React.createRef<HTMLDivElement>();
+    private ptaRef       = React.createRef<HTMLDivElement>();
+
+    /** Serialize the recharts SVG inside `ref` and download it as a PNG. */
+    private exportChartAsPng = (ref: React.RefObject<HTMLDivElement>, filename: string) => {
+        const container = ref.current;
+        if (!container) return;
+
+        // recharts stamps its <svg> with class "recharts-surface"; using this
+        // selector avoids accidentally picking up any icon SVG in the same div.
+        const svg = container.querySelector<SVGSVGElement>('.recharts-surface');
+        if (!svg) return;
+
+        const bbox = svg.getBoundingClientRect();
+        const w = Math.round(bbox.width);
+        const h = Math.round(bbox.height);
+        if (!w || !h) return;
+
+        // Clone and stamp explicit pixel dimensions so canvas can render it
+        const clone = svg.cloneNode(true) as SVGSVGElement;
+        clone.setAttribute('width',  String(w));
+        clone.setAttribute('height', String(h));
+        if (!clone.getAttribute('viewBox')) {
+            clone.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        }
+
+        const svgStr  = new XMLSerializer().serializeToString(clone);
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl  = URL.createObjectURL(svgBlob);
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { URL.revokeObjectURL(svgUrl); return; }
+
+        const img = new Image();
+        img.onload = () => {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            const a = document.createElement('a');
+            a.href     = canvas.toDataURL('image/png');
+            a.download = `${filename}.png`;
+            a.click();
+            URL.revokeObjectURL(svgUrl);
+        };
+        img.onerror = () => URL.revokeObjectURL(svgUrl);
+        img.src = svgUrl;
+    };
 
     public render() {
         const { series, height } = this.props;
@@ -69,7 +121,14 @@ export default class AudiogramChart extends React.PureComponent<Props> {
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
 
                 {/* Audiogram line chart + legend */}
-                <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                <div ref={this.audiogramRef} style={{ flex: '1 1 auto', minWidth: 0, position: 'relative' }}>
+                    <button
+                        className="audiogram-export-btn"
+                        title="Export audiogram as PNG"
+                        onClick={() => this.exportChartAsPng(this.audiogramRef, 'audiogram')}
+                    >
+                        <FiDownload size={11} /> PNG
+                    </button>
                     <ResponsiveContainer width="100%" height={height}>
                         <ComposedChart data={chartData} margin={{ top: 20, right: 30, bottom: 30, left: 20 }}>
 
@@ -156,8 +215,17 @@ export default class AudiogramChart extends React.PureComponent<Props> {
 
                 {/* PTA bar chart — narrow panel to the right */}
                 {ptaBarData.length > 0 && (
-                    <div className="audiogram-pta-panel">
-                        <div className="audiogram-pta-panel-title">Mean PTA</div>
+                    <div ref={this.ptaRef} className="audiogram-pta-panel">
+                        <div className="audiogram-pta-panel-header">
+                            <span className="audiogram-pta-panel-title">PTA</span>
+                            <button
+                                className="audiogram-export-btn"
+                                title="Export PTA chart as PNG"
+                                onClick={() => this.exportChartAsPng(this.ptaRef, 'pta_boxplot')}
+                            >
+                                <FiDownload size={11} />
+                            </button>
+                        </div>
                         <ResponsiveContainer width="100%" height={height - 22}>
                             <BarChart
                                 data={ptaBarData}
