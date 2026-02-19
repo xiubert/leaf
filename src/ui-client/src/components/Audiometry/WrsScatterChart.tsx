@@ -555,17 +555,21 @@ export default class WrsScatterChart extends React.PureComponent<Props, State> {
         const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
         const svgUrl  = URL.createObjectURL(svgBlob);
 
+        // Scale the canvas to physical pixels for high-DPI / retina displays.
+        // Minimum 2× so exports are crisp even on standard screens.
+        // The SVG is vector, so drawImage re-rasterizes it at the larger size.
+        const scale   = Math.max(window.devicePixelRatio || 1, 2);
         const canvas = document.createElement('canvas');
-        canvas.width  = w;
-        canvas.height = h;
+        canvas.width  = w * scale;
+        canvas.height = h * scale;
         const ctx = canvas.getContext('2d');
         if (!ctx) { URL.revokeObjectURL(svgUrl); return; }
 
         const img = new Image();
         img.onload = () => {
             ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, w, h);
-            ctx.drawImage(img, 0, 0, w, h);
+            ctx.fillRect(0, 0, w * scale, h * scale);
+            ctx.drawImage(img, 0, 0, w * scale, h * scale);
             const a    = document.createElement('a');
             a.href     = canvas.toDataURL('image/png');
             a.download = filename;
