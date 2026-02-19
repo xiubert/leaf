@@ -15,6 +15,7 @@ import './MrnImportModal.css';
 interface Props {
     data: ImportState;
     dispatch: any;
+    isIdentified: boolean;
     show: boolean;
 }
 
@@ -37,7 +38,7 @@ export default class MrnImportModal extends React.PureComponent<Props, State> {
         super(props);
         this.state = {
             identifiers: '',
-            mode: 'mrn',
+            mode: props.isIdentified ? 'mrn' : 'personId',
             name: '',
             result: null,
             isLoading: false,
@@ -97,6 +98,7 @@ export default class MrnImportModal extends React.PureComponent<Props, State> {
 
     private getMainContent = () => {
         const c = this.className;
+        const { isIdentified } = this.props;
         const { identifiers, mode, name, result, isLoading, isErrored } = this.state;
 
         if (isErrored) {
@@ -133,11 +135,12 @@ export default class MrnImportModal extends React.PureComponent<Props, State> {
             <>
                 {/* Mode selector */}
                 <div className={`${c}-mode`}>
-                    <label>
+                    <label className={!isIdentified ? `${c}-mode-disabled` : ''} title={!isIdentified ? 'MRN import requires PHI access' : ''}>
                         <input
                             type="radio"
                             value="mrn"
                             checked={mode === 'mrn'}
+                            disabled={!isIdentified}
                             onChange={this.handleModeChange}
                         />
                         MRN
