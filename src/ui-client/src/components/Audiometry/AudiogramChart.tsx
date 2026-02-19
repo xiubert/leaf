@@ -6,7 +6,7 @@ import React from 'react';
 import {
     ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid,
     Tooltip, ResponsiveContainer, ReferenceArea,
-    BarChart, Bar, Cell
+    BarChart, Bar, Cell, ErrorBar
 } from 'recharts';
 import { AudiogramSeries, AudiogramSummaryPoint } from '../../utils/audiogramData';
 
@@ -54,14 +54,18 @@ export default class AudiogramChart extends React.PureComponent<Props> {
         // PTA bar data: one entry per series that has pta data
         const ptaBarData = series
             .filter(s => s.pta?.mean != null)
-            .map(s => ({
-                label: s.label,
-                value: s.pta!.mean,
-                p25: s.pta!.p25,
-                p75: s.pta!.p75,
-                count: s.pta!.count,
-                color: s.color
-            }));
+            .map(s => {
+                const mean = s.pta!.mean!;
+                const p25  = s.pta!.p25;
+                const p75  = s.pta!.p75;
+                // ErrorBar [up, down] in value units. Y-axis is reversed so
+                // "up" (smaller y-pixel) = smaller dB = toward P25,
+                // "down" (larger y-pixel)  = larger dB = toward P75.
+                const errorRange = (p25 != null && p75 != null)
+                    ? [mean - p25, p75 - mean]   // [toward P25, toward P75]
+                    : undefined;
+                return { label: s.label, value: mean, p25, p75, count: s.pta!.count, color: s.color, errorRange };
+            });
 
         return (
             <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
@@ -182,6 +186,12 @@ export default class AudiogramChart extends React.PureComponent<Props> {
                                 />
                                 <Tooltip content={this.renderPtaTooltip} />
                                 <Bar dataKey="value" isAnimationActive={false}>
+                                    <ErrorBar
+                                        dataKey="errorRange"
+                                        width={5}
+                                        strokeWidth={1.5}
+                                        stroke="rgba(0,0,0,0.45)"
+                                    />
                                     {ptaBarData.map((entry, i) => (
                                         <Cell key={i} fill={entry.color} fillOpacity={0.85} />
                                     ))}
