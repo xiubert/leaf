@@ -9,7 +9,7 @@ import React from 'react';
 import { NavItem } from 'reactstrap';
 import { FiUploadCloud, FiUsers } from 'react-icons/fi';
 import { FaChevronDown } from 'react-icons/fa';
-import { toggleImportRedcapModal } from '../../actions/dataImport';
+import { toggleImportRedcapModal, toggleImportMrnModal } from '../../actions/dataImport';
 import ImportState from '../../models/state/Import';
 
 interface Props {
@@ -45,9 +45,9 @@ export default class ImportButton extends React.PureComponent<Props> {
 
                         {/* MRNs */}
                         {mrn.enabled &&
-                        <div className={`${c}-option`}>
+                        <div className={`${c}-option`} onClick={this.handleMrnImportClick}>
                             <FiUsers className={`${c}-icon-mrn`} />
-                            <span>MRNs</span>
+                            <span>Patient List</span>
                         </div>
                         }
 
@@ -60,5 +60,10 @@ export default class ImportButton extends React.PureComponent<Props> {
     private handleRedcapImportClick = () => {
         const { dispatch } = this.props;
         dispatch(toggleImportRedcapModal());
+    }
+
+    private handleMrnImportClick = () => {
+        const { dispatch } = this.props;
+        dispatch(toggleImportMrnModal());
     }
 }

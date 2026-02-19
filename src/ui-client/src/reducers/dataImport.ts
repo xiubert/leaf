@@ -97,12 +97,17 @@ export const dataImport = (state: ImportState = defaultImportState(), action: Im
                     summary: defaultImportState().redCap.summary
                 }
             });
-        case IMPORT_SET_OPTIONS:
+        case IMPORT_SET_OPTIONS: {
+            // Server may serialize the 'MRN' property as 'mRN' (camelCase first-char only),
+            // so check both 'mrn' and 'mRN' to be safe.
+            const opts = action.importOptions!;
+            const mrnOpts = opts.mrn || (opts as any).mRN || {};
             return Object.assign({}, state, {
-                mrn: { ...state.mrn, ...action.importOptions!.mrn },
-                redCap: { ...state.redCap, ...action.importOptions!.redCap },
-                enabled: action.importOptions!.redCap.enabled
+                mrn: { ...state.mrn, ...mrnOpts },
+                redCap: { ...state.redCap, ...opts.redCap },
+                enabled: opts.redCap.enabled || !!(mrnOpts && mrnOpts.enabled)
             });
+        }
         case IMPORT_SET_PROGRESS:
             return Object.assign({}, state, {
                 isImporting: true,

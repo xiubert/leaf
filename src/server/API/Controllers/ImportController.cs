@@ -54,10 +54,6 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
                 var meta = await importer.GetAllImportMetadata();
                 return Ok(meta);
             }
@@ -73,10 +69,6 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
                 ImportMetadata meta = null;
                 var isGuid = Guid.TryParse(id, out var guidId);
                 if (isGuid)
@@ -109,10 +101,6 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
                 var imported = await importer.CreateImportMetadata(dto);
                 return Ok(imported);
             }
@@ -128,10 +116,6 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
                 var updated = await importer.UpdateImportMetadata(dto);
                 if (updated == null)
                 {
@@ -152,10 +136,6 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
                 var deleted = await importer.DeleteImportMetadata(id);
                 if (deleted == null)
                 {
@@ -176,11 +156,7 @@ namespace API.Controllers
         {
             try
             {
-                if (!importOptions.REDCap.Enabled)
-                {
-                    return NotFound();
-                }
-                var upserted = await importer.ImportData(id, data.Records.Select(r => r.ToImportRecord()));
+                var upserted = await importer.ImportData(id, data.Records.Select(r => r.ToImportRecord()), data.SkipMapping);
                 if (upserted == null)
                 {
                     return NotFound();

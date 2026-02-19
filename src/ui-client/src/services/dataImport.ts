@@ -134,11 +134,12 @@ export const deleteMetadata = async (state: AppState, meta: ImportMetadata): Pro
 /*
  * Upsert import data.
  */
-export const upsertImportRecords = async (state: AppState, meta: ImportMetadata, records: ImportRecordDTO[]): Promise<ImportDataResultDTO> => {
+export const upsertImportRecords = async (state: AppState, meta: ImportMetadata, records: ImportRecordDTO[], skipMapping: boolean = false): Promise<ImportDataResultDTO> => {
     const { token } = state.session.context!;
     const http = HttpFactory.authenticated(token);
     const resp = await http.post(`api/import/data/${meta.id}`, {
-        records
+        records,
+        skipMapping
     });
     const result = resp.data as ImportDataResultDTO;
     return result;

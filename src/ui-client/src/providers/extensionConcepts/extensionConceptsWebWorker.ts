@@ -168,9 +168,50 @@ export default class ExtensionConceptsWebWorker {
                 const redcap = imports!.filter(i => i.type === redcapImport);
                 buildRedcapImportTree(redcap);
             }
+
+            /*
+             * Add MRN patient list import concepts.
+             */
+            const mrn = imports!.filter(i => i.type === mrnImport);
+            buildMrnImportTree(mrn);
+
             const roots = [ ...conceptMap.values() ].filter(c => c.isRoot);
 
             return { requestId, result: roots }
+        };
+
+        /*
+         * Build the MRN patient list import concept tree map.
+         */
+        const buildMrnImportTree = (mrnImports: ImportMetadata[]): void => {
+            if (mrnImports.length === 0) { return; }
+            const rootId = `urn:leaf:import:mrn:root`;
+            const root: Concept = {
+                ...getEmptyConcept(),
+                id: rootId,
+                universalId: rootId,
+                isParent: true,
+                isRoot: true,
+                childrenOnDrop: [],
+                uiDisplayName: 'Patient Lists'
+            };
+
+            for (const impt of mrnImports) {
+                const struct = impt.structure as { id: string; name: string; category: string };
+                const conc: Concept = {
+                    ...getEmptyConcept(),
+                    extensionId: impt.id!,
+                    id: struct.id,
+                    universalId: struct.id,
+                    parentId: rootId,
+                    rootId,
+                    uiDisplayName: struct.name || 'Patient List',
+                    uiDisplayText: `Included in patient list "${struct.name || 'Patient List'}"`,
+                };
+                conceptMap.set(conc.universalId!, conc);
+                (root.childrenOnDrop as Concept[]).push(conc);
+            }
+            conceptMap.set(rootId, root);
         };
 
         /*

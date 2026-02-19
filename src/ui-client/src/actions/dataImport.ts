@@ -14,11 +14,16 @@ import { REDCapImportConfiguration, REDCapConcept } from '../models/redcapApi/Im
 import { loadREDCapImportData, calculateREDCapFieldCount, createMetadata, getREDCapImportRecords, upsertImportRecords, getMetdataBySourceId, deleteMetadata, clearRecords, clearUnmappedRecords, updateMetadata } from '../services/dataImport';
 import { InformationModalState, NotificationStates, ConfirmationModalState } from '../models/state/GeneralUiState';
 import { setNoClickModalState, showInfoModal, showConfirmationModal } from './generalUi';
-import { ImportMetadata, ImportType, REDCapImportStructure } from '../models/dataImport/ImportMetadata';
+import { ImportMetadata, ImportType, REDCapImportStructure, MrnImportStructure } from '../models/dataImport/ImportMetadata';
+import { ImportDataResultDTO } from '../models/dataImport/ImportRecord';
 import { UserContext } from '../models/Auth';
 import { ConstraintType, Constraint } from '../models/admin/Concept';
-import { deleteAllExtensionConcepts, setExtensionRootConcepts } from './concepts';
+import { deleteAllExtensionConcepts, setExtensionRootConcepts, setConcept } from './concepts';
 import { getExtensionRootConcepts } from '../services/queryApi';
+import { addPanelItem } from './panels';
+import { getCounts } from './cohort/count';
+import { generate as generateId } from 'shortid';
+import { Concept } from '../models/concept/Concept';
 
 export const IMPORT_SET_METADATA = 'IMPORT_SET_METADATA';
 export const IMPORT_SET_LOADED = 'IMPORT_SET_LOADED';
@@ -240,6 +245,31 @@ const importFormRecordsFromREDCap = async (dispatch: any, conn: REDCapHttpConnec
 };
 
 /*
+ * Delete a manually imported MRN/PersonId patient list.
+ */
+export const deleteMrnImport = (meta: ImportMetadata) => {
+    return async (dispatch: any, getState: () => AppState) => {
+        const state = getState();
+        try {
+            await deleteMetadata(state, meta);
+            const imports = [ ...state.dataImport.imports.values() ].filter(d => d.id !== meta.id);
+            const extensionConcepts = await getExtensionRootConcepts(state.dataImport, imports, [ ...state.queries.saved.values() ]);
+            dispatch(deleteImportMetadata(meta));
+            dispatch(deleteAllExtensionConcepts());
+            dispatch(setExtensionRootConcepts(extensionConcepts));
+        } catch (err) {
+            console.log(err);
+            const info: InformationModalState = {
+                body: "Uh oh, something went wrong when attempting to delete the patient list. Please contact your Leaf administrator.",
+                header: "Error Deleting Patient List",
+                show: true
+            };
+            dispatch(showInfoModal(info));
+        }
+    };
+};
+
+/*
  * Delete an imported project.
  */
 export const deleteREDCapImport = (meta: ImportMetadata) => {
@@ -406,6 +436,82 @@ export const importREDCapProjectData = () => {
                 deleteMetadata(state, meta);
             }
         }
+    };
+};
+
+/*
+ * Import a manually entered list of MRNs or personIds.
+ * Creates import metadata + records on the server, rebuilds the
+ * extension concept tree, auto-populates Panel 0, and triggers getCounts().
+ */
+export const importMrnList = (identifiers: string[], mode: 'mrn' | 'personId', name: string) => {
+    return async (dispatch: any, getState: () => AppState): Promise<ImportDataResultDTO> => {
+        const state = getState();
+        const sourceId = `urn:leaf:import:mrn:${generateId()}`;
+
+        const structure: MrnImportStructure = {
+            id: sourceId,
+            name,
+            category: 'Patient Lists'
+        };
+
+        const metaInput: ImportMetadata = {
+            created: new Date(),
+            constraints: [],
+            sourceId,
+            structure,
+            type: ImportType.MRN,
+            updated: new Date()
+        };
+
+        // Create metadata on server to get back the real GUID id
+        const meta = await createMetadata(state, metaInput);
+
+        // Build one record per identifier
+        const records = identifiers.map(ident => ({
+            id: sourceId,
+            importMetadataId: meta.id!,
+            sourcePersonId: ident,
+            sourceValue: ident
+        }));
+
+        // Upsert records — skipMapping=true means PersonId=SourcePersonId (no MRN lookup)
+        const result = await upsertImportRecords(state, meta, records, mode === 'personId');
+
+        // Rebuild extension concept tree to include the new MRN import
+        const imports = [ ...state.dataImport.imports.values() ].concat([ meta ]);
+        const extensionConcepts = await getExtensionRootConcepts(state.dataImport, imports, [ ...state.queries.saved.values() ]);
+        dispatch(deleteAllExtensionConcepts());
+        dispatch(setExtensionRootConcepts(extensionConcepts));
+        dispatch(setImportMetadata(meta));
+
+        // Build a concept for this import list to add to Panel 0
+        const rootId = 'urn:leaf:import:mrn:root';
+        const concept: Concept = {
+            extensionId: meta.id!,
+            id: sourceId,
+            isExtension: true,
+            isEncounterBased: false,
+            isEventBased: false,
+            isNumeric: false,
+            isPatientCountAutoCalculated: false,
+            isParent: false,
+            isSpecializable: false,
+            rootId,
+            parentId: rootId,
+            uiDisplayName: name,
+            uiDisplayText: `Included in patient list "${name}"`,
+            universalId: sourceId,
+            childrenLoaded: true,
+            isFetching: false,
+            isOpen: false
+        };
+
+        dispatch(setConcept(concept));
+        dispatch(addPanelItem(concept, 0, 0));
+        dispatch(getCounts());
+
+        return result;
     };
 };
 
