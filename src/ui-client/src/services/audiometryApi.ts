@@ -7,7 +7,7 @@ import { PatientListDatasetDTO, PatientListDatasetShape } from '../models/patien
 import { HttpFactory } from './HttpFactory';
 
 const AUDIOGRAM_DATASET_NAME = 'Audiogram Thresholds';
-const WRS_DATASET_NAME       = 'Aud_WRS';
+const WRS_DATASET_NAME       = 'WRS';
 
 /**
  * Find the audiogram dataset ID from the already-loaded datasets in Redux state.
